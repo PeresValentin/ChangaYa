@@ -137,3 +137,20 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# React Native / Expo
+.expo/
+.expo-shared/
+ios/Pods/
+android/.gradle/
+android/app/build/
+*.keystore
+
+# Supabase local
+supabase/.env
+supabase/.temp/
+supabase/migrations/.shadow/
+
+# OS
+.DS_Store
+Thumbs.db
