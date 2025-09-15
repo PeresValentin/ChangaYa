@@ -2,12 +2,15 @@ import { View, Text, StyleSheet, Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
+import { useRouter } from "expo-router";
+
 
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 
 export default function WelcomeScreen() {
   const palette = theme.Colors.light;
+   const router = useRouter();   
 
   return (
     <View style={styles.container}>
@@ -40,11 +43,11 @@ export default function WelcomeScreen() {
         {/* Botón */}
         <PrimaryButton
           title="¡Empezar Ahora!"
-          onPress={() => (location.href = "/auth/login")}
+          onPress={() => router.push("/auth/register")}  
           style={styles.btnWrapper}
         />
 
-        {/* Footer */}
+        {/* Footer */}s
         <View style={styles.footer}>
           <Text style={styles.footerTxt}>¿Ya tienes cuenta?</Text>
           <Link href="/auth/login" style={styles.link}>

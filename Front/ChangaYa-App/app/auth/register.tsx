@@ -1,65 +1,165 @@
-import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
-import { Link } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Switch,
+} from "react-native";
+import { Link, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
-import TextField from "../../components/forms/TextField";
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 
 export default function RegisterScreen() {
   const palette = theme.Colors.light;
+  const [userType, setUserType] = useState<"worker" | "employer">("worker");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [subscribe, setSubscribe] = useState(false);
 
-  const handleRegister = () => {
-    Alert.alert("Registro", "TODO: conectar con Supabase Auth");
-  };
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
-      <View style={styles.card}>
-        <Text style={styles.title}>Crea tu cuenta</Text>
-        <Text style={styles.subtitle}>
-          Publicá o postuláte a changas en minutos
-        </Text>
+      {/* Header */}
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={24} color={palette.icon} />
+      </TouchableOpacity>
 
-        <TextField placeholder="Nombre completo" />
-        <TextField
-          placeholder="Email o teléfono"
-          inputMode="email"
-          autoCapitalize="none"
-        />
-        <TextField placeholder="Contraseña" secureTextEntry />
-        <TextField placeholder="Confirmar contraseña" secureTextEntry />
+      <Text style={styles.title}>Crear Cuenta</Text>
+      <Text style={styles.subtitle}>Completa tus datos para registrarte</Text>
 
-        <View style={styles.roleRow}>
-          <Pressable style={[styles.role, styles.roleActive]}>
-            <Text style={styles.roleTxt}>Contratante</Text>
-          </Pressable>
-          <Pressable style={styles.role}>
-            <Text style={styles.roleTxt}>Trabajador</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.termsRow}>
-          <View style={styles.checkbox} />
-          <Text style={styles.termsTxt}>
-            Acepto los{" "}
-            <Text style={styles.link}>Términos y Condiciones</Text>.
+      {/* Selector de usuario */}
+      <View style={styles.userTypeRow}>
+        <TouchableOpacity
+          style={[
+            styles.userTypeBtn,
+            userType === "worker" && styles.userTypeActive,
+          ]}
+          onPress={() => setUserType("worker")}
+        >
+          <Text
+            style={[
+              styles.userTypeText,
+              userType === "worker" && styles.userTypeTextActive,
+            ]}
+          >
+            👷 Soy Trabajador
           </Text>
+          <Text
+            style={[
+              styles.userTypeSmall,
+              userType === "worker" && styles.userTypeSmallActive,
+            ]}
+          >
+            Busco changas para trabajar
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.userTypeBtn,
+            userType === "employer" && styles.userTypeActive,
+          ]}
+          onPress={() => setUserType("employer")}
+        >
+          <Text
+            style={[
+              styles.userTypeText,
+              userType === "employer" && styles.userTypeTextActive,
+            ]}
+          >
+            🏠 Busco Trabajadores
+          </Text>
+          <Text
+            style={[
+              styles.userTypeSmall,
+              userType === "employer" && styles.userTypeSmallActive,
+            ]}
+          >
+            Necesito contratar servicios
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Formulario */}
+      <View style={styles.form}>
+        <View style={styles.row}>
+          <TextInput
+            placeholder="Nombre"
+            style={styles.input}
+            placeholderTextColor={palette.muted}
+          />
+          <TextInput
+            placeholder="Apellido"
+            style={styles.input}
+            placeholderTextColor={palette.muted}
+          />
         </View>
-
-        <PrimaryButton
-          title="Registrarme"
-          onPress={handleRegister}
-          style={{ marginTop: theme.SPACING.md }}
+        <TextInput
+          placeholder="Email"
+          keyboardType="email-address"
+          style={styles.input}
+          placeholderTextColor={palette.muted}
         />
+        <TextInput
+          placeholder="Teléfono"
+          keyboardType="phone-pad"
+          style={styles.input}
+          placeholderTextColor={palette.muted}
+        />
+        <TextInput
+          placeholder="DNI"
+          keyboardType="numeric"
+          style={styles.input}
+          placeholderTextColor={palette.muted}
+        />
+        <TextInput
+          placeholder="Contraseña"
+          secureTextEntry
+          style={styles.input}
+          placeholderTextColor={palette.muted}
+        />
+      </View>
 
-        <Text style={styles.footerTxt}>
-          ¿Ya tienes cuenta?{" "}
-          <Link href="/auth/login" style={styles.link}>
-            Iniciar sesión
-          </Link>
+      {/* Checkboxes */}
+      <View style={styles.checkboxRow}>
+        <Switch
+          value={acceptTerms}
+          onValueChange={setAcceptTerms}
+          thumbColor={acceptTerms ? palette.tint : "#ccc"}
+        />
+        <Text style={styles.checkboxText}>
+          Acepto los <Text style={styles.link}>términos y condiciones</Text>
         </Text>
+      </View>
+      <View style={styles.checkboxRow}>
+        <Switch
+          value={subscribe}
+          onValueChange={setSubscribe}
+          thumbColor={subscribe ? palette.tint : "#ccc"}
+        />
+        <Text style={styles.checkboxText}>
+          Recibir ofertas y novedades por email
+        </Text>
+      </View>
+
+      {/* Botón */}
+      <PrimaryButton
+        title="CREAR CUENTA"
+        onPress={() => alert("Cuenta creada")}
+        style={styles.btnWrapper}
+        disabled={!acceptTerms} // Solo habilitado si acepta términos
+      />
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Text style={styles.footerTxt}>¿Ya tienes cuenta?</Text>
+        <Link href="/auth/login" style={styles.link}>
+          Inicia Sesión
+        </Link>
       </View>
     </View>
   );
@@ -71,79 +171,105 @@ const palette = Colors.light;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.background,
-    padding: SPACING.lg,
-    justifyContent: "center",
-  },
-  card: {
     backgroundColor: palette.white,
-    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+  },
+  backBtn: {
+    marginBottom: SPACING.md,
   },
   title: {
-    fontSize: FONT.xl,
+    fontSize: FONT.xxl,
     fontWeight: "800" as const,
-    color: palette.text,
     textAlign: "center" as const,
+    color: palette.icon,
   },
   subtitle: {
     fontSize: FONT.sm,
     color: palette.muted,
     textAlign: "center" as const,
-    marginBottom: 10,
+    marginBottom: SPACING.lg,
   },
-  roleRow: {
+  userTypeRow: {
     flexDirection: "row" as const,
-    gap: 10,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.sm,
+    justifyContent: "space-between",
+    marginBottom: SPACING.lg,
   },
-  role: {
+  userTypeBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: palette.border,
-    paddingVertical: 10,
+    borderColor: palette.icon,
     borderRadius: RADIUS.md,
-    alignItems: "center" as const,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70, // misma altura para ambos
   },
-  roleActive: {
+  userTypeActive: {
+    backgroundColor: palette.tint, // verde igual al botón principal
     borderColor: palette.tint,
-    backgroundColor: palette.background,
   },
-  roleTxt: {
+  userTypeText: {
+    fontSize: FONT.md,
+    color: palette.icon,
     fontWeight: "600" as const,
+    textAlign: "center" as const,
+  },
+  userTypeTextActive: {
+    color: palette.white,
+  },
+  userTypeSmall: {
+    fontSize: FONT.lg,
+    color: palette.muted,
+    textAlign: "center" as const,
+  },
+  userTypeSmallActive: {
+    color: palette.white,
+  },
+  form: {
+    gap: 12,
+    marginBottom: SPACING.md,
+  },
+  row: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#aaa",
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: FONT.md,
+    backgroundColor: palette.white,
     color: palette.text,
   },
-  termsRow: {
+  checkboxRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginTop: SPACING.sm,
+    marginBottom: 10,
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.background,
-  },
-  termsTxt: {
-    marginLeft: SPACING.sm,
-    color: palette.muted,
-    flex: 1,
+  checkboxText: {
+    marginLeft: 8,
     fontSize: FONT.sm,
+    color: palette.icon,
+  },
+  btnWrapper: {
+    marginTop: SPACING.lg,
+    borderRadius: 50,
+    width: "100%",
+    alignSelf: "center",
+  },
+  footer: {
+    marginTop: 20,
+    alignItems: "center",
   },
   footerTxt: {
-    textAlign: "center" as const,
     color: palette.muted,
-    marginTop: 12,
+    marginBottom: 4,
   },
-  link: {
-    color: palette.tint,
-    fontWeight: "700" as const,
-  },
+  link: { color: palette.tint, fontWeight: "700" as const },
 });
