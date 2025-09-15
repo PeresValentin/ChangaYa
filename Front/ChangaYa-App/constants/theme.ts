@@ -1,48 +1,42 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
-import { Platform } from 'react-native';
-
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+import { Platform } from "react-native";
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: "#353D2F",            // Black olive para texto principal
+    background: "#E6FAFC",      // Azure como fondo claro
+    tint: "#6BA368",            // Asparagus como acento
+    icon: "#515B3A",            // Dark moss green para íconos
+    tabIconDefault: "#A1E99D",  // Light green para tabs inactivos
+    tabIconSelected: "#6BA368", // Asparagus para tab activo
+    white: "#FFFFFF",
+    muted: "#6B7280",
+    border: "#E5E7EB",
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: "#E6FAFC",            // Texto claro
+    background: "#353D2F",      // Fondo oscuro (Black olive)
+    tint: "#A1E99D",            // Light green como acento
+    icon: "#6BA368",            // Asparagus para íconos
+    tabIconDefault: "#515B3A",  // Dark moss green tabs inactivos
+    tabIconSelected: "#A1E99D", // Light green tab activo
+    white: "#FFFFFF",
+    muted: "#9CA3AF",
+    border: "#4B5563",
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    sans: "system-ui",
+    serif: "ui-serif",
+    rounded: "ui-rounded",
+    mono: "ui-monospace",
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+  android: {
+    sans: "normal",
+    serif: "serif",
+    rounded: "normal",
+    mono: "monospace",
   },
   web: {
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
@@ -50,4 +44,18 @@ export const Fonts = Platform.select({
     rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
+  default: {
+    sans: "normal",
+    serif: "serif",
+    rounded: "normal",
+    mono: "monospace",
+  },
 });
+
+const RADIUS = { sm: 8, md: 12, lg: 20 };
+const SPACING = { xs: 4, sm: 8, md: 14, lg: 20 };
+const FONT = { sm: 13, md: 15, lg: 18, xl: 24, xxl: 28 };
+
+const theme = { Colors, Fonts, RADIUS, SPACING, FONT };
+
+export default theme;
