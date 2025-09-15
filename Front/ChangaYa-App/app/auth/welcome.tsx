@@ -47,7 +47,7 @@ export default function WelcomeScreen() {
           style={styles.btnWrapper}
         />
 
-        {/* Footer */}s
+        {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerTxt}>¿Ya tienes cuenta?</Text>
           <Link href="/auth/login" style={styles.link}>

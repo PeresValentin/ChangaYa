@@ -149,7 +149,7 @@ export default function RegisterScreen() {
       {/* Botón */}
       <PrimaryButton
         title="CREAR CUENTA"
-        onPress={() => alert("Cuenta creada")}
+        onPress={() => router.push("/auth/login")}
         style={styles.btnWrapper}
         disabled={!acceptTerms} // Solo habilitado si acepta términos
       />

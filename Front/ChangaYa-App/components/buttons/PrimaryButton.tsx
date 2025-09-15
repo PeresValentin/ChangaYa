@@ -34,7 +34,7 @@ const styles = {
         backgroundColor: palette.tint,
         paddingVertical: theme.SPACING.md,
         borderRadius: theme.RADIUS.md,
-        alignItems: "center" as const, // 👈 fix TS
+        alignItems: "center" as const, 
       },
     }).btn,
 
@@ -42,7 +42,7 @@ const styles = {
     StyleSheet.create({
       txt: {
         color: palette.white,
-        fontWeight: 700, // 👈 fix TS
+        fontWeight: 700, 
         fontSize: theme.FONT.md,
         letterSpacing: 0.3,
         fontFamily: theme.Fonts?.sans,
