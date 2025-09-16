@@ -22,6 +22,7 @@ export default function WelcomeScreen() {
         <Image
           source={require("../../assets/images/welcome_logo.png")}
           style={styles.heroImage}
+          resizeMode="fit"
         />
 
 
