@@ -6,8 +6,8 @@ export const Colors = {
     background: "#E6FAFC",      // Azure como fondo claro
     tint: "#6BA368",            // Asparagus como acento
     icon: "#515B3A",            // Dark moss green para íconos
-    tabIconDefault: "#A1E99D",  // Light green para tabs inactivos
-    tabIconSelected: "#6BA368", // Asparagus para tab activo
+    tabIconDefault: "#A1F19D",  // Light green para tabs inactivos
+    tabIconSelected: "#ebfaeaff", // Asparagus para tab activo
     white: "#FFFFFF",
     muted: "#6B7280",
     border: "#E5E7EB",
