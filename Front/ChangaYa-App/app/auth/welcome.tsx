@@ -75,13 +75,13 @@ const palette = Colors.light;
 const styles = StyleSheet.create({
   container: {
   flex: 1,
-  backgroundColor: palette.tabIconSelected,  
+  backgroundColor: palette.background,  
   justifyContent: "center",
   alignItems: "center",
   padding: SPACING.lg,
 },
   card: {
-    backgroundColor: palette.tabIconSelected,
+    backgroundColor: palette.background,
     borderRadius: 10,
     padding: SPACING.lg,
     shadowColor: "transparent",
