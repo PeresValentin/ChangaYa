@@ -3,11 +3,11 @@ import { Platform } from "react-native";
 export const Colors = {
   light: {
     text: "#353D2F",            // Black olive para texto principal
-    background: "#E6FAFC",      // Azure como fondo claro
+    background: "#ebfaeaff",      // Azure como fondo claro
     tint: "#6BA368",            // Asparagus como acento
     icon: "#515B3A",            // Dark moss green para íconos
-    tabIconDefault: "#A1E99D",  // Light green para tabs inactivos
-    tabIconSelected: "#6BA368", // Asparagus para tab activo
+    tabIconDefault: "#A1F19D",  // Light green para tabs inactivos
+    tabIconSelected: "#cfe6cdff", // Asparagus para tab activo
     white: "#FFFFFF",
     muted: "#6B7280",
     border: "#E5E7EB",

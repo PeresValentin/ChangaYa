@@ -20,14 +20,14 @@ export default function WelcomeScreen() {
       <View style={styles.card}>
         {/* Imagen superior */}
         <Image
-          source={require("../../assets/images/welcome-hero.png")}
+          source={require("../../assets/images/welcome_logo.png")}
           style={styles.heroImage}
-          resizeMode="contain"
         />
 
+
         {/* Títulos */}
-        <Text style={styles.titleLine1}>Encuentra tu</Text>
-        <Text style={styles.titleLine2}>Changa Perfecta</Text>
+        <Text style={styles.titleLine1}>Tu próxima changa</Text>
+        <Text style={styles.titleLine2}>Más cerca de lo que creés</Text>
 
         <Text style={styles.subtitle}>
           Conectamos trabajadores con oportunidades cerca tuyo de manera rápida y segura
@@ -35,9 +35,9 @@ export default function WelcomeScreen() {
 
         {/* Bullets */}
         <View style={styles.bullets}>
-          <Bullet text="Trabajos cerca de ti" color={palette.tint} />
-          <Bullet text="Pagos seguros y rápidos" color={palette.icon} />
-          <Bullet text="Calificaciones verificadas" color={palette.text} />
+          <Bullet text="Changas cerca tuyo" color={palette.tint} />
+          <Bullet text="Opiniones de la comunidad" color={palette.icon} />
+          <Bullet text="Oportunidades reales y confiables" color={palette.text} />
         </View>
 
         {/* Botón */}
@@ -74,27 +74,29 @@ const palette = Colors.light;
 const styles = StyleSheet.create({
   container: {
   flex: 1,
-  backgroundColor: palette.white,  
+  backgroundColor: palette.background,  
   justifyContent: "center",
   alignItems: "center",
   padding: SPACING.lg,
 },
   card: {
-    backgroundColor: palette.white,
-    borderRadius: 0,
+    backgroundColor: palette.background,
+    borderRadius: 10,
     padding: SPACING.lg,
     shadowColor: "transparent",
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
     width: "100%",
+    height: "100%",
     maxWidth: 400,      
     alignItems: "center",
   },
   heroImage: {
-    width: 220,
-    height: 140,
-    marginBottom: 70,
+    width: 420,
+    height: 200,
+    marginBottom: 20,
+    borderRadius: 10,
   },
   titleLine1: {
     fontSize: FONT.xl,
@@ -103,25 +105,32 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
   },
   titleLine2: {
-    fontSize: FONT.xxl,
+    fontSize: FONT.xl,
     fontWeight: "900" as const,
     color: palette.tint,
     textAlign: "center" as const,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: FONT.sm,
+    fontSize: FONT.md,
     color: palette.muted,
     textAlign: "center" as const,
-    marginBottom: 16,
+    marginBottom: 55,
   },
-  bullets: { gap: 10, marginBottom: 16, width: "100%" },
+  bullets: { 
+    backgroundColor: palette.white,
+    borderRadius: 10,
+    padding: 15,
+    gap: 10, 
+    marginBottom: 50, 
+    width: "110%" 
+  },
   bulletRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 8,
   },
-  bulletText: { color: palette.text, fontSize: FONT.md },
+  bulletText: { color: palette.text, fontSize: FONT.lg, fontWeight: "700" as const },
   btnWrapper: {
   marginTop: SPACING.md,
   width: "100%",      // ocupa todo el ancho de la tarjeta
