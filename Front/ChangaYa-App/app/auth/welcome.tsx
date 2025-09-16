@@ -22,7 +22,6 @@ export default function WelcomeScreen() {
         <Image
           source={require("../../assets/images/welcome_logo.png")}
           style={styles.heroImage}
-          resizeMode="fit"
         />
 
 
@@ -116,14 +115,14 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     color: palette.muted,
     textAlign: "center" as const,
-    marginBottom: 50,
+    marginBottom: 55,
   },
   bullets: { 
     backgroundColor: palette.white,
     borderRadius: 10,
     padding: 15,
     gap: 10, 
-    marginBottom: 40, 
+    marginBottom: 50, 
     width: "110%" 
   },
   bulletRow: {
