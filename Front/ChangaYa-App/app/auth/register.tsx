@@ -21,6 +21,11 @@ export default function RegisterScreen() {
 
   const router = useRouter();
 
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [dni, setDni] = useState("");
+  const [password, setPassword] = useState("");
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -40,22 +45,31 @@ export default function RegisterScreen() {
           ]}
           onPress={() => setUserType("worker")}
         >
-          <Text
-            style={[
-              styles.userTypeText,
-              userType === "worker" && styles.userTypeTextActive,
-            ]}
-          >
-            👷 Soy Trabajador
-          </Text>
-          <Text
-            style={[
-              styles.userTypeSmall,
-              userType === "worker" && styles.userTypeSmallActive,
-            ]}
-          >
-            Busco changas para trabajar
-          </Text>
+          <View style={styles.userTypeBtnRow}>
+            <Text
+            style={styles.btnIcon}
+            >
+            👷
+            </Text>
+            <View style={styles.userTypeBtnClm}>
+              <Text
+              style={[
+                styles.userTypeText,
+                userType === "worker" && styles.userTypeTextActive,
+              ]}
+              >
+              Soy Trabajador
+              </Text>
+              <Text
+                style={[
+                  styles.userTypeSmall,
+                  userType === "worker" && styles.userTypeSmallActive,
+                ]}
+              >
+                Busco changas para trabajar
+              </Text>
+            </View>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -64,23 +78,33 @@ export default function RegisterScreen() {
             userType === "employer" && styles.userTypeActive,
           ]}
           onPress={() => setUserType("employer")}
-        >
-          <Text
-            style={[
-              styles.userTypeText,
-              userType === "employer" && styles.userTypeTextActive,
-            ]}
-          >
-            🏠 Busco Trabajadores
-          </Text>
-          <Text
-            style={[
-              styles.userTypeSmall,
-              userType === "employer" && styles.userTypeSmallActive,
-            ]}
-          >
-            Necesito contratar servicios
-          </Text>
+        > 
+          <View style={styles.userTypeBtnRow}>
+            <Text
+            style={styles.btnIcon}
+            >
+            🏠
+            </Text>
+            <View style={styles.userTypeBtnClm}>
+              <Text
+              style={[
+                styles.userTypeText,
+                userType === "employer" && styles.userTypeTextActive,
+              ]}
+              >
+              Busco Trabajadores
+              </Text>
+              <Text
+                style={[
+                  styles.userTypeSmall,
+                  userType === "employer" && styles.userTypeSmallActive,
+                ]}
+              >
+                Necesito contratar servicios
+              </Text>
+            </View>
+          </View>
+          
         </TouchableOpacity>
       </View>
 
@@ -99,29 +123,40 @@ export default function RegisterScreen() {
           />
         </View>
         <TextInput
+          value={email}
+          onChangeText={setEmail}
           placeholder="Email"
           keyboardType="email-address"
           style={styles.input}
           placeholderTextColor={palette.muted}
         />
+
         <TextInput
+          value={phone}
+          onChangeText={setPhone}
           placeholder="Teléfono"
           keyboardType="phone-pad"
           style={styles.input}
           placeholderTextColor={palette.muted}
         />
+
         <TextInput
+          value={dni}
+          onChangeText={setDni}
           placeholder="DNI"
           keyboardType="numeric"
           style={styles.input}
           placeholderTextColor={palette.muted}
         />
+
         <TextInput
+          value={password}
+          onChangeText={setPassword}
           placeholder="Contraseña"
           secureTextEntry
           style={styles.input}
           placeholderTextColor={palette.muted}
-        />
+        />  
       </View>
 
       {/* Checkboxes */}
@@ -171,7 +206,7 @@ const palette = Colors.light;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.white,
+    backgroundColor: palette.background,
     padding: SPACING.lg,
   },
   backBtn: {
@@ -184,14 +219,14 @@ const styles = StyleSheet.create({
     color: palette.icon,
   },
   subtitle: {
-    fontSize: FONT.sm,
+    fontSize: FONT.md,
     color: palette.muted,
     textAlign: "center" as const,
     marginBottom: SPACING.lg,
   },
   userTypeRow: {
     flexDirection: "row" as const,
-    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: SPACING.lg,
   },
   userTypeBtn: {
@@ -203,34 +238,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginHorizontal: 4,
     backgroundColor: palette.white,
-    alignItems: "center",
+    alignItems: "stretch",
     justifyContent: "center",
     minHeight: 70, // misma altura para ambos
+  },
+  userTypeBtnRow:{
+    flexDirection: "row" as const,
+    alignItems: "center",
+  },
+  btnIcon:{
+    fontSize: 20,
+    marginRight: 8,
+  },
+  userTypeBtnClm:{
+    flexDirection: "column" as const,
+    flex: 1,
   },
   userTypeActive: {
     backgroundColor: palette.tint, // verde igual al botón principal
     borderColor: palette.tint,
   },
   userTypeText: {
-    fontSize: FONT.md,
+    fontSize: FONT.sm,
     color: palette.icon,
-    fontWeight: "600" as const,
-    textAlign: "center" as const,
+    fontWeight: "900" as const,
+    textAlign: "left" as const,
   },
   userTypeTextActive: {
     color: palette.white,
   },
   userTypeSmall: {
-    fontSize: FONT.lg,
+    fontSize: FONT.sm,
     color: palette.muted,
-    textAlign: "center" as const,
+    textAlign: "left" as const,
   },
   userTypeSmallActive: {
     color: palette.white,
   },
   form: {
+    height: 280,
     gap: 12,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   row: {
     flexDirection: "row" as const,
@@ -246,11 +294,13 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     backgroundColor: palette.white,
     color: palette.text,
+    minHeight: 48,
+    textAlignVertical: "center", // Android
+    lineHeight: FONT.md + 6,     // da más aire al placeholder
   },
   checkboxRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: 10,
   },
   checkboxText: {
     marginLeft: 8,
