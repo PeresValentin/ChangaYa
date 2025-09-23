@@ -19,6 +19,7 @@ const palette = theme.Colors.light;
 
 type JobVariant = "primary" | "secondary";
 
+// Lista de changas cercanas (ejemplo hardcodeado)
 const nearbyJobs = [
   {
     id: "plomero",
@@ -58,6 +59,7 @@ const nearbyJobs = [
   },
 ];
 
+// Navegación inferior rápida
 const quickLinks = [
   { id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" },
   { id: "chats", title: "Chats", icon: "chatbubble-ellipses-outline" as const, route: "/chats" },
@@ -87,12 +89,13 @@ export default function InicioTrabajadorScreen() {
               </View>
               <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
             </View>
+
             <View style={styles.avatar}>
               <Text style={styles.avatarInitial}>{initials}</Text>
             </View>
           </View>
 
-          {/* Buscar */}
+          {/* Barra de búsqueda */}
           <View style={styles.searchWrapper}>
             <Ionicons name="search-outline" size={20} color={palette.muted} />
             <TextInput
@@ -111,7 +114,7 @@ export default function InicioTrabajadorScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Lista de changas */}
+          {/* Changas cercanas */}
           <View style={styles.sectionHeader}>
             <View>
               <Text style={styles.sectionTitle}>Changas Cerca Tuyo</Text>
@@ -129,30 +132,37 @@ export default function InicioTrabajadorScreen() {
                   <View style={styles.cardIconWrapper}>
                     <Ionicons name={job.icon} size={22} color={palette.tint} />
                   </View>
+
                   <View style={styles.cardInfo}>
+                    {/* Header de la card: título + favorito */}
                     <View style={styles.cardHeader}>
                       <Text style={styles.cardTitle}>{job.title}</Text>
                       <TouchableOpacity style={styles.favoriteButton}>
                         <Ionicons name="heart-outline" size={20} color={palette.tint} />
                       </TouchableOpacity>
                     </View>
+
                     <Text style={styles.cardDescription}>{job.description}</Text>
 
+                    {/* Chips con info extra */}
                     <View style={styles.chipRow}>
                       <View style={styles.infoChip}>
                         <Ionicons name="location-outline" size={14} color={palette.tint} />
                         <Text style={styles.infoChipText}>{job.distance}</Text>
                       </View>
+
                       <View style={styles.infoChip}>
                         <Ionicons name="time-outline" size={14} color={palette.tint} />
                         <Text style={styles.infoChipText}>{job.schedule}</Text>
                       </View>
+
                       <View style={styles.infoChip}>
                         <Ionicons name="cash-outline" size={14} color={palette.tint} />
                         <Text style={styles.infoChipText}>{job.price}</Text>
                       </View>
                     </View>
 
+                    {/* Footer de la card: rating + acción */}
                     <View style={styles.cardFooter}>
                       <Text style={styles.rating}>{job.rating}</Text>
                       <TouchableOpacity
@@ -181,7 +191,7 @@ export default function InicioTrabajadorScreen() {
           </View>
         </ScrollView>
 
-        {/* Accesos rápidos */}
+        {/* Navegación inferior */}
         <View style={styles.bottomNav}>
           {quickLinks.map((item) => {
             const isActive = item.id === "home";
@@ -209,28 +219,40 @@ export default function InicioTrabajadorScreen() {
   );
 }
 
+/* =====================
+   Estilos
+   ===================== */
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: palette.background },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: palette.background 
+  },
 
   container: { flex: 1 },
   scroll: { flex: 1 },
+
   scrollContent: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.lg * 4,
   },
 
-  // Header
+  /* ---------- Header ---------- */
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: SPACING.lg,
   },
+
   headerText: { flex: 1, marginRight: SPACING.md },
+
   greetingRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm },
+
   greeting: { fontSize: FONT.xl, fontWeight: "700" as const, color: palette.icon },
+
   subtitle: { marginTop: 4, fontSize: FONT.md, color: palette.muted },
+
   avatar: {
     width: 52,
     height: 52,
@@ -242,9 +264,10 @@ const styles = StyleSheet.create({
     borderColor: palette.tint,
     elevation: 3,
   },
+
   avatarInitial: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.tint },
 
-  // Search
+  /* ---------- Search ---------- */
   searchWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -256,7 +279,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
   },
+
   searchField: { flex: 1, fontSize: FONT.md, color: palette.icon },
+
   searchButton: {
     width: 36,
     height: 36,
@@ -266,7 +291,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Section headers
+  /* ---------- Section headers ---------- */
   sectionHeader: {
     marginTop: SPACING.lg,
     marginBottom: SPACING.md,
@@ -274,12 +299,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+
   sectionTitle: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.icon },
+
   sectionSubtitle: { marginTop: 4, fontSize: FONT.sm, color: palette.muted },
+
   linkText: { color: palette.tint, fontWeight: "600" as const },
 
-  // Cards
+  /* ---------- Cards ---------- */
   cardList: { gap: SPACING.md },
+
   card: {
     backgroundColor: palette.white,
     borderRadius: RADIUS.lg,
@@ -290,7 +319,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
+
   cardContent: { flexDirection: "row", gap: SPACING.md },
+
   cardIconWrapper: {
     width: 52,
     height: 52,
@@ -299,21 +330,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   cardInfo: { flex: 1 },
+
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+
   favoriteButton: { padding: 4 },
+
   cardTitle: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.icon },
+
   cardDescription: { marginTop: 4, fontSize: FONT.md, color: palette.muted },
+
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: SPACING.xs,
     marginTop: SPACING.sm,
   },
+
   infoChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -323,25 +361,32 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs + 2,
     gap: 6,
   },
+
   infoChipText: { fontSize: FONT.sm, color: palette.icon },
+
   cardFooter: {
     marginTop: SPACING.sm,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+
   rating: { fontSize: FONT.sm, color: palette.muted },
+
   cardAction: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.lg,
     backgroundColor: palette.tint,
   },
+
   cardActionSecondary: { backgroundColor: palette.icon },
+
   cardActionText: { fontSize: FONT.sm, fontWeight: "700" as const, color: palette.white },
+
   cardActionTextSecondary: { color: palette.white },
 
-  // Bottom nav
+  /* ---------- Bottom nav ---------- */
   bottomNav: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -357,10 +402,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 6,
   },
+
   navItem: { alignItems: "center", gap: 4, flex: 1, paddingVertical: SPACING.xs },
+
   navItemActive: { position: "relative" },
+
   navText: { fontSize: FONT.sm, color: palette.muted },
+
   navTextActive: { color: palette.tint, fontWeight: "600" as const },
+
   activeIndicator: {
     position: "absolute",
     bottom: -SPACING.xs,

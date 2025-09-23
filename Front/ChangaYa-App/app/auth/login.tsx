@@ -14,16 +14,19 @@ import theme from "../../constants/theme";
 
 export default function LoginScreen() {
   const palette = theme.Colors.light;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userType, setUserType] = useState<"trabajador" | "contratante">("trabajador");
+
   const router = useRouter();
 
   // Manejo de navegación según el tipo de usuario
   const handleLogin = () => {
     const destination =
       userType === "trabajador" ? "/home/trabajador" : "/home/contratante";
-    router.push(destination as any); // 👈 TS no reconoce la ruta, por eso se castea a any
+
+    router.push(destination as any); // 👈 Se castea a `any` por limitaciones de TS en expo-router
   };
 
   return (
@@ -33,11 +36,11 @@ export default function LoginScreen() {
         <Text style={styles.avatarText}>C</Text>
       </View>
 
-      {/* Títulos */}
+      {/* Encabezado */}
       <Text style={styles.title}>¡Bienvenido!</Text>
       <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
 
-      {/* Inputs */}
+      {/* Formulario */}
       <View style={styles.form}>
         <TextInput
           placeholder="Email o teléfono"
@@ -133,6 +136,9 @@ export default function LoginScreen() {
   );
 }
 
+/* =====================
+   Estilos
+   ===================== */
 const { RADIUS, SPACING, FONT } = theme;
 const palette = theme.Colors.light;
 
@@ -145,7 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Avatar superior
+  /* ---------- Avatar ---------- */
   avatar: {
     width: 80,
     height: 80,
@@ -155,19 +161,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: SPACING.md,
   },
+
   avatarText: {
     fontSize: FONT.xl,
     fontWeight: "700" as const,
     color: palette.white,
   },
 
-  // Títulos
+  /* ---------- Encabezado ---------- */
   title: {
     fontSize: FONT.xl,
     fontWeight: "800" as const,
     color: palette.icon,
     textAlign: "center" as const,
   },
+
   subtitle: {
     fontSize: FONT.sm,
     color: palette.muted,
@@ -175,15 +183,16 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
 
-  // Formulario
+  /* ---------- Formulario ---------- */
   form: {
     width: "100%",
     gap: 12,
     marginBottom: SPACING.md,
   },
+
   input: {
     borderWidth: 1,
-    borderColor: "#bbb", // 👈 quizás convenga tomarlo del theme para unificar
+    borderColor: "#bbb", // 👈 convendría usar palette.border para consistencia
     borderRadius: RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -191,6 +200,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.white,
     color: palette.text,
   },
+
   forgotPassword: {
     fontSize: FONT.sm,
     color: palette.muted,
@@ -198,7 +208,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Toggle de rol (Trabajador/Contratante)
+  /* ---------- Toggle de rol ---------- */
   roleToggle: {
     flexDirection: "row",
     width: "100%",
@@ -209,6 +219,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
     gap: SPACING.xs,
   },
+
   roleOption: {
     flex: 1,
     paddingVertical: SPACING.sm,
@@ -219,20 +230,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
+
   roleOptionActive: {
     backgroundColor: palette.tint,
     borderColor: palette.tint,
   },
+
   roleOptionText: {
     fontSize: FONT.md,
     color: palette.muted,
     fontWeight: "600" as const,
   },
+
   roleOptionTextActive: {
     color: palette.white,
   },
 
-  // Botón principal
+  /* ---------- Botón principal ---------- */
   btnWrapper: {
     marginTop: SPACING.md,
     borderRadius: 50,
@@ -240,21 +254,27 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  // Separador
+  /* ---------- Separador ---------- */
   separator: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     marginVertical: SPACING.md,
     width: "100%",
   },
-  line: { flex: 1, height: 1, backgroundColor: "#ddd" },
+
+  line: { 
+    flex: 1, 
+    height: 1, 
+    backgroundColor: "#ddd" 
+  },
+
   separatorText: {
     fontSize: FONT.sm,
     color: palette.muted,
     marginHorizontal: 8,
   },
 
-  // Botón Google
+  /* ---------- Botón Google ---------- */
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -266,11 +286,31 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: SPACING.md,
   },
-  googleIcon: { width: 20, height: 20, marginRight: 8 },
-  googleText: { fontSize: FONT.md, color: palette.icon },
 
-  // Footer
-  footer: { marginTop: 10, alignItems: "center" },
-  footerTxt: { color: palette.muted, marginBottom: 4 },
-  link: { color: palette.tint, fontWeight: "700" as const },
+  googleIcon: { 
+    width: 20, 
+    height: 20, 
+    marginRight: 8 
+  },
+
+  googleText: { 
+    fontSize: FONT.md, 
+    color: palette.icon 
+  },
+
+  /* ---------- Footer ---------- */
+  footer: { 
+    marginTop: 10, 
+    alignItems: "center" 
+  },
+
+  footerTxt: { 
+    color: palette.muted, 
+    marginBottom: 4 
+  },
+
+  link: { 
+    color: palette.tint, 
+    fontWeight: "700" as const 
+  },
 });
