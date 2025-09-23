@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -6,17 +6,18 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import PrimaryButton from "../../components/buttons/PrimaryButton";
-import TextField from "../../components/forms/TextField";
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
+
+type JobVariant = "primary" | "secondary";
 
 const nearbyJobs = [
   {
@@ -29,6 +30,7 @@ const nearbyJobs = [
     rating: "⭐️ 4.8 (23 reseñas)",
     icon: "construct-outline" as const,
     actionLabel: "Postular",
+    variant: "primary" as JobVariant,
   },
   {
     id: "limpieza",
@@ -40,6 +42,7 @@ const nearbyJobs = [
     rating: "⭐️ 4.5 (15 reseñas)",
     icon: "sparkles-outline" as const,
     actionLabel: "Postular",
+    variant: "primary" as JobVariant,
   },
   {
     id: "delivery",
@@ -51,10 +54,12 @@ const nearbyJobs = [
     rating: "⭐️ 4.9 (45 reseñas)",
     icon: "bicycle-outline" as const,
     actionLabel: "Saber más",
+    variant: "secondary" as JobVariant,
   },
 ];
 
 const quickLinks = [
+  { id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" },
   { id: "chats", title: "Chats", icon: "chatbubble-ellipses-outline" as const, route: "/chats" },
   { id: "mis-changas", title: "Mis Changas", icon: "briefcase-outline" as const, route: "/changas" },
   { id: "perfil", title: "Perfil", icon: "person-circle-outline" as const, route: "/profile" },
@@ -63,113 +68,156 @@ const quickLinks = [
 export default function InicioTrabajadorScreen() {
   const router = useRouter();
   const initials = useMemo(() => "Juan".charAt(0), []);
+  const [searchQuery, setSearchQuery] = useState("");
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <View style={styles.greetingRow}>
-              <Text style={styles.greeting}>¡Hola Juan!</Text>
-              <HelloWave />
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <View style={styles.greetingRow}>
+                <Text style={styles.greeting}>¡Hola Juan!</Text>
+                <HelloWave />
+              </View>
+              <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
             </View>
-            <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarInitial}>{initials}</Text>
+            </View>
           </View>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitial}>{initials}</Text>
+
+          {/* Buscar */}
+          <View style={styles.searchWrapper}>
+            <Ionicons name="search-outline" size={20} color={palette.muted} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Buscar changas..."
+              placeholderTextColor={palette.muted}
+              style={styles.searchField}
+              returnKeyType="search"
+            />
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={() => router.push("/changas" as any)}
+            >
+              <Ionicons name="funnel-outline" size={18} color={palette.white} />
+            </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Buscar */}
-        <TextField
-          placeholder="Buscar changas..."
-          placeholderTextColor={palette.muted}
-          style={styles.searchField}
-        />
-
-        {/* Lista de changas */}
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Changas Cerca Tuyo</Text>
-            <Text style={styles.sectionSubtitle}>Basadas en tu ubicación actual</Text>
+          {/* Lista de changas */}
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Changas Cerca Tuyo</Text>
+              <Text style={styles.sectionSubtitle}>Basadas en tu ubicación actual</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/changas" as any)}>
+              <Text style={styles.linkText}>Ver todas</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.push("/changas" as any)}>
-            <Text style={styles.linkText}>Ver todas</Text>
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.cardList}>
-          {nearbyJobs.map((job) => (
-            <View key={job.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardIconWrapper}>
-                  <Ionicons name={job.icon} size={24} color={palette.tint} />
+          <View style={styles.cardList}>
+            {nearbyJobs.map((job) => (
+              <View key={job.id} style={styles.card}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardIconWrapper}>
+                    <Ionicons name={job.icon} size={22} color={palette.tint} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.cardTitle}>{job.title}</Text>
+                      <TouchableOpacity style={styles.favoriteButton}>
+                        <Ionicons name="heart-outline" size={20} color={palette.tint} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.cardDescription}>{job.description}</Text>
+
+                    <View style={styles.chipRow}>
+                      <View style={styles.infoChip}>
+                        <Ionicons name="location-outline" size={14} color={palette.tint} />
+                        <Text style={styles.infoChipText}>{job.distance}</Text>
+                      </View>
+                      <View style={styles.infoChip}>
+                        <Ionicons name="time-outline" size={14} color={palette.tint} />
+                        <Text style={styles.infoChipText}>{job.schedule}</Text>
+                      </View>
+                      <View style={styles.infoChip}>
+                        <Ionicons name="cash-outline" size={14} color={palette.tint} />
+                        <Text style={styles.infoChipText}>{job.price}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.rating}>{job.rating}</Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.cardAction,
+                          job.variant === "secondary" && styles.cardActionSecondary,
+                        ]}
+                        onPress={() =>
+                          router.push({ pathname: "/changas/[id]", params: { id: job.id } })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.cardActionText,
+                            job.variant === "secondary" && styles.cardActionTextSecondary,
+                          ]}
+                        >
+                          {job.actionLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
-                <TouchableOpacity>
-                  <Ionicons name="heart-outline" size={22} color={palette.tint} />
-                </TouchableOpacity>
               </View>
-              <Text style={styles.cardTitle}>{job.title}</Text>
-              <Text style={styles.cardDescription}>{job.description}</Text>
-
-              <View style={styles.cardDetailRow}>
-                <Ionicons name="location-outline" size={16} color={palette.icon} />
-                <Text style={styles.cardDetailText}>{job.distance}</Text>
-              </View>
-              <View style={styles.cardDetailRow}>
-                <Ionicons name="time-outline" size={16} color={palette.icon} />
-                <Text style={styles.cardDetailText}>{job.schedule}</Text>
-              </View>
-              <View style={styles.cardDetailRow}>
-                <Ionicons name="cash-outline" size={16} color={palette.icon} />
-                <Text style={styles.cardDetailText}>{job.price}</Text>
-              </View>
-              <Text style={styles.rating}>{job.rating}</Text>
-
-              <PrimaryButton
-                title={job.actionLabel}
-                onPress={() =>
-                  router.push({ pathname: "/changas/[id]", params: { id: job.id } })
-                }
-                style={
-                  job.actionLabel === "Saber más"
-                    ? styles.secondaryButton
-                    : styles.primaryButton
-                }
-              />
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        </ScrollView>
 
         {/* Accesos rápidos */}
         <View style={styles.bottomNav}>
-          {quickLinks.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.navItem}
-              onPress={() => router.push(item.route as any)}
-            >
-              <Ionicons name={item.icon} size={22} color={palette.icon} />
-              <Text style={styles.navText}>{item.title}</Text>
-            </TouchableOpacity>
-          ))}
+          {quickLinks.map((item) => {
+            const isActive = item.id === "home";
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.navItem, isActive && styles.navItemActive]}
+                onPress={() => router.push(item.route as any)}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={22}
+                  color={isActive ? palette.tint : palette.icon}
+                />
+                <Text style={[styles.navText, isActive && styles.navTextActive]}>
+                  {item.title}
+                </Text>
+                {isActive ? <View style={styles.activeIndicator} /> : null}
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: palette.background,
-  },
+  safeArea: { flex: 1, backgroundColor: palette.background },
 
+  container: { flex: 1 },
+  scroll: { flex: 1 },
   scrollContent: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.lg * 2,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.lg * 4,
   },
 
   // Header
@@ -179,25 +227,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: SPACING.lg,
   },
-  headerText: {
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  greetingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  greeting: {
-    fontSize: FONT.xl,
-    fontWeight: "700" as const,
-    color: palette.icon,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: FONT.md,
-    color: palette.muted,
-  },
+  headerText: { flex: 1, marginRight: SPACING.md },
+  greetingRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm },
+  greeting: { fontSize: FONT.xl, fontWeight: "700" as const, color: palette.icon },
+  subtitle: { marginTop: 4, fontSize: FONT.md, color: palette.muted },
   avatar: {
     width: 52,
     height: 52,
@@ -209,16 +242,28 @@ const styles = StyleSheet.create({
     borderColor: palette.tint,
     elevation: 3,
   },
-  avatarInitial: {
-    fontSize: FONT.lg,
-    fontWeight: "700" as const,
-    color: palette.tint,
-  },
+  avatarInitial: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.tint },
 
   // Search
-  searchField: {
-    marginTop: -SPACING.sm,
+  searchWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: palette.white,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  searchField: { flex: 1, fontSize: FONT.md, color: palette.icon },
+  searchButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: palette.tint,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Section headers
@@ -229,20 +274,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  sectionTitle: {
-    fontSize: FONT.lg,
-    fontWeight: "700" as const,
-    color: palette.icon,
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: FONT.sm,
-    color: palette.muted,
-  },
-  linkText: {
-    color: palette.tint,
-    fontWeight: "600" as const,
-  },
+  sectionTitle: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.icon },
+  sectionSubtitle: { marginTop: 4, fontSize: FONT.sm, color: palette.muted },
+  linkText: { color: palette.tint, fontWeight: "600" as const },
 
   // Cards
   cardList: { gap: SPACING.md },
@@ -250,71 +284,89 @@ const styles = StyleSheet.create({
     backgroundColor: palette.white,
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
-    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
+  cardContent: { flexDirection: "row", gap: SPACING.md },
   cardIconWrapper: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: palette.tabIconSelected,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardTitle: {
-    fontSize: FONT.lg,
-    fontWeight: "700" as const,
-    color: palette.icon,
+  cardInfo: { flex: 1 },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  cardDescription: {
-    marginTop: 4,
-    fontSize: FONT.md,
-    color: palette.muted,
+  favoriteButton: { padding: 4 },
+  cardTitle: { fontSize: FONT.lg, fontWeight: "700" as const, color: palette.icon },
+  cardDescription: { marginTop: 4, fontSize: FONT.md, color: palette.muted },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
   },
-  cardDetailRow: {
+  infoChip: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: palette.background,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs + 2,
     gap: 6,
-    marginTop: 6,
   },
-  cardDetailText: {
-    fontSize: FONT.sm,
-    color: palette.icon,
-  },
-  rating: {
+  infoChipText: { fontSize: FONT.sm, color: palette.icon },
+  cardFooter: {
     marginTop: SPACING.sm,
-    fontSize: FONT.sm,
-    color: palette.muted,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  primaryButton: {
-    marginTop: SPACING.md,
+  rating: { fontSize: FONT.sm, color: palette.muted },
+  cardAction: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: palette.tint,
   },
-  secondaryButton: {
-    marginTop: SPACING.md,
-    backgroundColor: palette.icon,
-  },
+  cardActionSecondary: { backgroundColor: palette.icon },
+  cardActionText: { fontSize: FONT.sm, fontWeight: "700" as const, color: palette.white },
+  cardActionTextSecondary: { color: palette.white },
 
   // Bottom nav
   bottomNav: {
-    marginTop: SPACING.lg,
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingVertical: SPACING.md,
-    backgroundColor: palette.white,
-    borderRadius: RADIUS.lg,
-    elevation: 3,
-  },
-  navItem: {
     alignItems: "center",
-    gap: 4,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: palette.white,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 6,
   },
-  navText: {
-    fontSize: FONT.sm,
-    color: palette.muted,
+  navItem: { alignItems: "center", gap: 4, flex: 1, paddingVertical: SPACING.xs },
+  navItemActive: { position: "relative" },
+  navText: { fontSize: FONT.sm, color: palette.muted },
+  navTextActive: { color: palette.tint, fontWeight: "600" as const },
+  activeIndicator: {
+    position: "absolute",
+    bottom: -SPACING.xs,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.tint,
   },
 });
