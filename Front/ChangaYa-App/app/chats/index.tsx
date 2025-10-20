@@ -1,8 +1,9 @@
-// Front/ChangaYa-App/app/ChatsScreen.js
+// Front/ChangaYa-App/app/chats/index.tsx
 
 import React, { useState, useEffect, Component } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'; // ✅ agregado para navegación con Expo Router
 // Importamos un componente que vamos a crear para cada fila
 import ChatListItem, { Chat } from '../../components/ChatListItem';
 // Importamos el cliente de Supabase (asumimos que existe)
@@ -15,7 +16,9 @@ const DUMMY_CHATS = [
     // ... más datos
 ];
 
-const ChatsScreen = ({ navigation }: { navigation: any }) => {
+// ✅ no necesitamos { navigation } porque expo-router maneja la navegación con useRouter()
+const ChatsScreen = () => {
+    const router = useRouter(); // ✅ hook de navegación
     const [chats, setChats] = useState<typeof DUMMY_CHATS>(DUMMY_CHATS);
     const [searchText, setSearchText] = useState('');
 
@@ -39,9 +42,10 @@ const ChatsScreen = ({ navigation }: { navigation: any }) => {
 
     // Función que se ejecuta cuando el usuario presiona una conversación
     const handleChatPress = (chatId: string) => {
+        // ✅ Adaptado para expo-router
         // Navegar a la pantalla de la conversación individual
-        // Tendrás que registrar una pantalla de chat individual (ej. ChatDetailScreen)
-        navigation.navigate('ChatDetail', { chatId });
+        // Tendrás que registrar una pantalla de chat individual (ej. /app/chats/[id].tsx)
+        router.push({ pathname: '/chats/[id]', params: { id: chatId } });
     };
 
     return (
@@ -56,7 +60,7 @@ const ChatsScreen = ({ navigation }: { navigation: any }) => {
                     value={searchText}
                     onChangeText={setSearchText}
                 />
-                 <TouchableOpacity style={styles.editIconContainer}>
+                <TouchableOpacity style={styles.editIconContainer}>
                     <Ionicons name="create-outline" size={24} color="#555" /> 
                 </TouchableOpacity>
             </View>

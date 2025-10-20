@@ -19,8 +19,15 @@ export default function RootLayout() {
       <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false }}/>
       <Stack.Screen name="auth/register" options={{ headerShown: false }}/>
+      <Stack.Screen name="home/trabajador" options={{ headerShown: false }} />
+      <Stack.Screen name="home/contratante" options={{ headerShown: false }} />
+      <Stack.Screen name="chats/index" options={{ headerShown: false }} />
     </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
   );
 }
+
+
+//Hola chicos, este es el layout principal de la aplicacion donde se definen las pantallas y el tema de la app. Basicamente la navegacion muchachos, en base vayas creando pantallas agreguenlas.
+
