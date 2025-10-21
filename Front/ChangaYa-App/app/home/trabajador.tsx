@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { HelloWave } from "../../components/hello-wave";
@@ -60,15 +60,35 @@ const nearbyJobs = [
 ];
 
 // Navegación inferior rápida
-const quickLinks = [
-  { id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" },
-  { id: "chats", title: "Chats", icon: "chatbubble-ellipses-outline" as const, route: "/chats" },
-  { id: "mis-changas", title: "Mis Changas", icon: "briefcase-outline" as const, route: "/changas" },
-  { id: "perfil", title: "Perfil", icon: "person-circle-outline" as const, route: "/profile" },
+const quickLinks: {
+  id: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  route: Href;
+}[] = [
+  { id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" as Href },
+  {
+    id: "chats",
+    title: "Chats",
+    icon: "chatbubble-ellipses-outline" as const,
+    route: "/chats" as Href,
+  },
+  {
+    id: "mis-changas",
+    title: "Mis Changas",
+    icon: "briefcase-outline" as const,
+    route: "/changas" as Href,
+  },
+  {
+    id: "perfil",
+    title: "Perfil",
+    icon: "person-circle-outline" as const,
+    route: "/profile" as Href,
+  },
 ];
-
 export default function InicioTrabajadorScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const initials = useMemo(() => "Juan".charAt(0), []);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -191,16 +211,21 @@ export default function InicioTrabajadorScreen() {
           </View>
         </ScrollView>
 
-        {/* Navegación inferior */}
         <View style={styles.bottomNav}>
           {quickLinks.map((item) => {
-            const isActive = item.id === "home";
+            const routePath =
+              typeof item.route === "string"
+                ? item.route
+                : (item.route as any)?.pathname ?? String(item.route);
+            const isActive =
+              pathname === routePath || pathname.startsWith(`${routePath}/`);
             return (
               <TouchableOpacity
                 key={item.id}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => router.push(item.route as any)}
+                onPress={() => router.push(item.route)}
               >
+              
                 <Ionicons
                   name={item.icon}
                   size={22}
