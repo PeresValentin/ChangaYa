@@ -28,6 +28,8 @@ export default function RootLayout() {
         <Stack.Screen name="changas/nueva" options={{ headerShown: false }} />
         <Stack.Screen name="changas/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/index" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
