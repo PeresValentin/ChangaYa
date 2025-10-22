@@ -44,7 +44,7 @@ const quickLinks: {
 		id: "mis-changas",
 		title: "Mis Changas",
 		icon: "briefcase-outline" as const,
-		route: "/changas" as Href,
+		route: "/changas/mis" as Href,
 	},
 	{
 		id: "perfil",
