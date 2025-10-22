@@ -1,7 +1,7 @@
 // app/changas/nueva.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router'; // Para configurar header y navegación
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     SafeAreaView,
@@ -27,9 +27,8 @@ const CATEGORIAS = ['Plomería', 'Limpieza', 'Delivery', 'Hogar', 'Mascotas', 'O
 // =========================================================
 const CrearChangaScreen = () => {
     const router = useRouter();
-
-    // --- Estados del Formulario ---
-    const [categoria, setCategoria] = useState<string>('Plomería'); // Valor inicial de ejemplo
+    const { categoria: categoriaParam } = useLocalSearchParams<{ categoria?: string }>(); 
+    const [categoria, setCategoria] = useState<string>(categoriaParam || '');
     const [titulo, setTitulo] = useState<string>('');
     const [descripcion, setDescripcion] = useState<string>('');
     const [precio, setPrecio] = useState<string>('');
