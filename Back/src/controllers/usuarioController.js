@@ -1,7 +1,9 @@
 import { supabase } from '../config/supabaseClient.js'
 import argon2 from 'argon2'
 import jwt from 'jsonwebtoken'
+import { transporter } from '../config/mailer.js'
 
+const JWT_EMAIL_SECRET = process.env.JWT_EMAIL_SECRET
 const JWT_SECRET = process.env.JWT_SECRET
 
 // ✅ Obtener todos los usuarios
@@ -21,8 +23,6 @@ export const getUsuarios = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
-
-
 
 // ✅ Obtener un usuario por ID
 export const getUsuarioById = async (req, res) => {
@@ -47,36 +47,82 @@ export const getUsuarioById = async (req, res) => {
 export const createUsuario = async (req, res) => {
   try {
     const { nombreUsuario, clave, nombre, apellido, dni, email, telefono, tipoUsuario } = req.body
+
     if (!nombreUsuario || !dni || !email || !clave) {
       return res.status(400).json({ error: 'Faltan: nombreUsuario, dni, email o clave.' })
     }
 
-    const passwordHash  = await argon2.hash(clave, {
+    // Hashear la clave (como antes)
+    const passwordHash = await argon2.hash(clave, {
       type: argon2.argon2id,
-      memoryCost: 19456, // ~19MB
+      memoryCost: 19456,
       timeCost: 2,
       parallelism: 1
     })
 
+    // Generar token de verificación por 30 minutos
+    const verificationToken = jwt.sign(
+      { nombreUsuario, passwordHash, nombre, apellido, dni, email, telefono, tipoUsuario },
+      JWT_EMAIL_SECRET,
+      { expiresIn: '30m' }
+    )
+
+    // Link de verificación (podés reemplazar localhost por tu dominio)
+    const verificationLink = `http://localhost:3000/api/usuarios/verificar?token=${verificationToken}`
+
+    // Enviar el mail
+    await transporter.sendMail({
+      from: `"ChangaYa!" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: 'Verificá tu cuenta en ChangaYa!',
+      html: `
+        <h2>¡Hola ${nombre}!</h2>
+        <p>Gracias por registrarte en <b>ChangaYa!</b>.</p>
+        <p>Por favor verificá tu cuenta haciendo clic en el siguiente enlace:</p>
+        <a href="${verificationLink}" target="_blank">${verificationLink}</a>
+        <p>Este enlace expira en 30 minutos.</p>
+      `
+    })
+
+    res.status(200).json({
+      message: 'Correo de verificación enviado. Tenés 30 minutos para confirmarlo.'
+    })
+
+  } catch (err) {
+    console.error('Error en registro temporal:', err)
+    res.status(400).json({ error: err.message })
+  }
+}
+
+// ✅ Verificar email y crear usuario real
+export const verificarUsuario = async (req, res) => {
+  try {
+    const { token } = req.query
+    if (!token) return res.status(400).json({ error: 'Falta el token de verificación' })
+
+    // Verificar el token (expira a los 30 minutos)
+    const decoded = jwt.verify(token, JWT_EMAIL_SECRET)
+
+    // Insertar usuario real en Supabase
     const { data, error } = await supabase
       .from('Usuario')
       .insert([{
-        nombreUsuario,
-        nombre,
-        apellido,
-        dni,          
-        email,
-        telefono,
-        tipoUsuario,
-        clave: passwordHash   // 👈 se guarda el hash en la columna 'clave'
+        nombreUsuario: decoded.nombreUsuario,
+        nombre: decoded.nombre,
+        apellido: decoded.apellido,
+        dni: decoded.dni,
+        email: decoded.email,
+        telefono: decoded.telefono,
+        tipoUsuario: decoded.tipoUsuario,
+        clave: decoded.passwordHash
       }])
       .select()
 
     if (error) throw error
-    
-    const sanitized = data.map(({ clave, ...rest }) => rest)
-    res.status(201).json(sanitized)
+
+    res.status(201).json({ message: 'Cuenta verificada y creada correctamente' })
   } catch (err) {
+    console.error('❌ Error en verificación:', err)
     res.status(400).json({ error: err.message })
   }
 }

@@ -5,7 +5,8 @@ import {
   createUsuario,
   updateUsuario,
   deleteUsuario,
-  loginUsuario
+  loginUsuario,
+  verificarUsuario
 } from '../controllers/usuarioController.js'
 
 import { verificarToken } from '../middleware/authMiddleware.js'
@@ -14,6 +15,7 @@ const router = express.Router()
 
 router.post('/', createUsuario)
 router.post('/login', loginUsuario)
+router.get('/verificar', verificarUsuario)
 
 // 🔒 Rutas protegidas (requieren token)
 router.get('/', verificarToken, getUsuarios)
