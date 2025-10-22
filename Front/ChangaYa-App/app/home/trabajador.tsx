@@ -1,15 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
+import { usePathname, useRouter, type Href } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
-  View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { usePathname, useRouter, type Href } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
@@ -147,7 +147,13 @@ export default function InicioTrabajadorScreen() {
 
           <View style={styles.cardList}>
             {nearbyJobs.map((job) => (
-              <View key={job.id} style={styles.card}>
+              <TouchableOpacity key={job.id} style={styles.card} activeOpacity={0.7}
+            onPress={() =>
+              router.push({ 
+              pathname: "/changas/[id]", // <-- Usá el patrón [id]
+              params: { id: job.id, viewMode: 'trabajador' } // <-- Pasá 'id' y 'viewMode' acá
+              })
+            }>
                 <View style={styles.cardContent}>
                   <View style={styles.cardIconWrapper}>
                     <Ionicons name={job.icon} size={22} color={palette.tint} />
@@ -206,7 +212,7 @@ export default function InicioTrabajadorScreen() {
                     </View>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </ScrollView>

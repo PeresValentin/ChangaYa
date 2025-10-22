@@ -368,7 +368,12 @@ export default function InicioContratanteScreen() {
 
                   style={styles.card}
 
-                  onPress={() => router.push(`/changas/${job.id}` as any)}
+                onPress={() => 
+                  router.push({ 
+                  pathname: "/changas/[id]", // <-- Usá el patrón [id]
+                  params: { id: job.id, viewMode: 'contratante' } // <-- Pasá 'id' y 'viewMode' acá
+                  })
+                }
 
                 >
 
