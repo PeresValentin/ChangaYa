@@ -1,158 +1,137 @@
 // Front/ChangaYa-App/app/chats/index.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter, type Href } from 'expo-router'; // <-- MODIFICADO
+import { usePathname, useRouter, type Href } from 'expo-router';
 import React, { useState } from 'react';
 import {
-	FlatList,
-	SafeAreaView,
-	StyleSheet,
-	Text,
-	TextInput,
-	TouchableOpacity, // <-- AÑADIDO
-	View,
+  FlatList,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import ChatListItem, { Chat } from '../../components/ChatListItem';
-import theme from '../../constants/theme'; // <-- AÑADIDO
+import theme from '../../constants/theme';
+import { useProfileNavigation } from '../../hooks/use-profile-navigation'; // agregado
 
-// AÑADIDO: Constantes de Estilo (copiadas de trabajador.tsx)
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
-// Datos de ejemplo (Tus datos)
-// Aplicamos el tipo 'Chat[]' para asegurar que los datos coinciden
 const DUMMY_CHATS: Chat[] = [
-	{ id: '1', user: 'Ana Martínez', lastMessage: '¡Perfecto! Llego en 15 minutos', time: '10:30', unread: 2 },
-	{ id: '2', user: 'Carlos López', lastMessage: 'Gracias por la changa! Todo...', time: 'Ayer', unread: 0 },
+  {
+    id: '1',
+    user: 'Ana Martínez',
+    lastMessage: '¡Perfecto! Llego en 15 minutos',
+    time: '10:30',
+    unread: 2,
+  },
+  {
+    id: '2',
+    user: 'Carlos López',
+    lastMessage: 'Gracias por la changa! Todo...',
+    time: 'Ayer',
+    unread: 0,
+  },
 ];
 
-// AÑADIDO: Navegación (copiada de trabajador.tsx)
 const quickLinks: {
-	id: string;
-	title: string;
-	icon: keyof typeof Ionicons.glyphMap;
-	route: Href;
+  id: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  route: Href;
 }[] = [
-	{ id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" as Href },
-	{
-		id: "chats",
-		title: "Chats",
-		icon: "chatbubble-ellipses-outline" as const,
-		route: "/chats" as Href,
-	},
-	{
-		id: "mis-changas",
-		title: "Mis Changas",
-		icon: "briefcase-outline" as const,
-		route: "/changas" as Href,
-	},
-	{
-		id: "perfil",
-		title: "Perfil",
-		icon: "person-circle-outline" as const,
-		route: "/profile" as Href,
-	},
+  { id: 'home', title: 'Home', icon: 'home-outline', route: '/home/trabajador' as Href },
+  { id: 'chats', title: 'Chats', icon: 'chatbubble-ellipses-outline', route: '/chats' as Href },
+  { id: 'mis-changas', title: 'Mis Changas', icon: 'briefcase-outline', route: '/changas' as Href },
+  { id: 'perfil', title: 'Perfil', icon: 'person-circle-outline', route: '/perfil' as Href },
 ];
 
-// =========================================================
-// COMPONENTE DE PANTALLA
-// =========================================================
 const ChatsScreen = () => {
-	const router = useRouter();
-	const pathname = usePathname(); // <-- AÑADIDO
-	const [chats, setChats] = useState<Chat[]>(DUMMY_CHATS); // <-- Usamos Chat[]
-	const [searchText, setSearchText] = useState('');
+  const router = useRouter();
+  const pathname = usePathname();
+  const [chats] = useState<Chat[]>(DUMMY_CHATS);
+  const [searchText, setSearchText] = useState('');
+  const { goToProfile } = useProfileNavigation(); // nuevo hook
 
-	// ... Tu lógica de useEffect (comentada) ...
+  const handleChatPress = (chatId: string) => {
+    router.push({ pathname: '/chats/[id]', params: { id: chatId } });
+  };
 
-	const handleChatPress = (chatId: string) => {
-		router.push({ pathname: '/chats/[id]', params: { id: chatId } });
-	};
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.contentWrapper}>
+          <Text style={styles.headerTitle}>Chats</Text>
 
-	return (
-		// MODIFICADO: Usamos la estructura de trabajador.tsx
-		<SafeAreaView style={styles.safeArea}>
-			<View style={styles.container}>
-				
-				{/* Contenido principal: Usamos un View flexible para que 
-					el contenido de la lista ocupe todo el espacio 
-					y la barra de navegación quede pegada abajo.
-				*/}
-				<View style={styles.contentWrapper}>
-					{/* Encabezado y Barra de Búsqueda */}
-					<Text style={styles.headerTitle}>Chats</Text>
-					<View style={styles.searchContainer}>
-						<Ionicons name="search" size={20} color={palette.muted} style={styles.searchIcon} />
-						<TextInput
-							style={styles.searchInput}
-							placeholder="Buscar conversaciones..."
-							placeholderTextColor={palette.muted} // <-- AÑADIDO
-							value={searchText}
-							onChangeText={setSearchText}
-						/>
-						<TouchableOpacity style={styles.editIconContainer}>
-							<Ionicons name="create-outline" size={24} color="#555" />
-						</TouchableOpacity>
-					</View>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={palette.muted} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar conversaciones..."
+              placeholderTextColor={palette.muted}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+            <TouchableOpacity style={styles.editIconContainer}>
+              <Ionicons name="create-outline" size={24} color="#555" />
+            </TouchableOpacity>
+          </View>
 
-					{/* Lista de Conversaciones */}
-					<FlatList
-						data={chats.filter(chat => chat.user.toLowerCase().includes(searchText.toLowerCase()))}
-						keyExtractor={(item) => item.id}
-						renderItem={({ item }) => (
-							<ChatListItem
-								chat={item}
-								onPress={() => handleChatPress(item.id)}
-							/>
-						)}
-						ItemSeparatorComponent={() => <View style={styles.separator} />}
-					/>
-				</View>
+          <FlatList
+            data={chats.filter((chat) =>
+              chat.user.toLowerCase().includes(searchText.toLowerCase()),
+            )}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <ChatListItem chat={item} onPress={() => handleChatPress(item.id)} />
+            )}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        </View>
 
-				{/* AÑADIDO: Barra de navegación (copiada de trabajador.tsx) */}
-				<View style={styles.bottomNav}>
-					{quickLinks.map((item) => {
-						const routePath =
-							typeof item.route === "string"
-								? item.route
-								: (item.route as any)?.pathname ?? String(item.route);
-						const isActive =
-							pathname === routePath || pathname.startsWith(`${routePath}/`);
-						return (
-							<TouchableOpacity
-								key={item.id}
-								style={[styles.navItem, isActive && styles.navItemActive]}
-								onPress={() => {
-                                // SI es el botón de Home...
-                                if (item.id === 'home') {
-                                    // ¡CAMBIO! Simplemente retrocedemos a la pantalla anterior
-                                    router.back(); 
-                                } 
-                                // PARA CUALQUIER OTRO BOTÓN...
-                                else {
-                                    // Usamos la ruta definida en quickLinks (comportamiento original)
-                                    router.push(item.route);
-                                }
-                            }}
-							>
-								<Ionicons
-									name={item.icon}
-									size={22}
-									color={isActive ? palette.tint : palette.icon}
-								/>
-								<Text style={[styles.navText, isActive && styles.navTextActive]}>
-									{item.title}
-								</Text>
-								{isActive ? <View style={styles.activeIndicator} /> : null}
-							</TouchableOpacity>
-						);
-					})}
-				</View>
-			</View>
-		</SafeAreaView>
-	);
+        <View style={styles.bottomNav}>
+          {quickLinks.map((item) => {
+            const routePath =
+              typeof item.route === 'string'
+                ? item.route
+                : (item.route as any)?.pathname ?? String(item.route);
+            const isActive = pathname === routePath || pathname.startsWith(`${routePath}/`);
+
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.navItem, isActive && styles.navItemActive]}
+                onPress={() => {
+                  if (item.id === 'perfil') {
+                    goToProfile();
+                    return;
+                  }
+                  if (item.id === 'home') {
+                    router.back();
+                  } else {
+                    router.push(item.route);
+                  }
+                }}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={22}
+                  color={isActive ? palette.tint : palette.icon}
+                />
+                <Text style={[styles.navText, isActive && styles.navTextActive]}>
+                  {item.title}
+                </Text>
+                {isActive ? <View style={styles.activeIndicator} /> : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 };
-
 // =========================================================
 // ESTILOS
 // =========================================================

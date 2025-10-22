@@ -1,3 +1,5 @@
+// Front/ChangaYa-App/app/perfil/index.tsx
+
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
 import {
@@ -13,12 +15,14 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
 import ReviewItem from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
+import { useProfileNavigation } from "@/hooks/use-profile-navigation"; // añadido
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
 
 const USER_PROFILE = {
+  id: "worker-001", // añadido para coherencia con los perfiles públicos mockeados
   name: "María Rodríguez",
   location: "La Plata, Buenos Aires",
   rating: 4.8,
@@ -71,9 +75,12 @@ const PerfilPrivadoScreen = () => {
     .map((part) => part.charAt(0))
     .join("")
     .toUpperCase();
+
   const generalScorePercent = Math.round(
-    Math.min(1, Math.max(0, USER_PROFILE.generalScore)) * 100,
+    Math.min(1, Math.max(0, USER_PROFILE.generalScore)) * 100
   );
+
+  const { currentUserId } = useProfileNavigation(); // coherencia futura con navegación centralizada
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -101,9 +108,7 @@ const PerfilPrivadoScreen = () => {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Puntuación general</Text>
-            <Text style={styles.sectionValue}>
-              {generalScorePercent}%
-            </Text>
+            <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
           </View>
           <View style={styles.progressTrack}>
             <View

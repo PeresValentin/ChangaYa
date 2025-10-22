@@ -35,7 +35,7 @@ type PublicProfile = {
 
 const MOCK_PROFILES: PublicProfile[] = [
   {
-    id: "1",
+    id: "worker-001",
     name: "María Rodríguez",
     location: "La Plata, Buenos Aires",
     rating: 4.8,
@@ -77,6 +77,77 @@ const MOCK_PROFILES: PublicProfile[] = [
         rating: 4.8,
         description:
           "Realizó varias reparaciones pequeñas y dejó todo funcionando perfecto. Muy recomendable.",
+      },
+    ],
+  },
+   {
+    id: "worker-002",
+    name: "Ana Martínez",
+    location: "Quilmes, Buenos Aires",
+    rating: 4.6,
+    completedJobs: 88,
+    generalScore: 0.89,
+    about:
+      "Electricista matriculada con foco en instalaciones domiciliarias seguras y eficientes. Disfruto acompañar al cliente en cada paso para que entienda qué estoy haciendo en su hogar.",
+    topSkills: [
+      { id: "skill-electrica", label: "Instalaciones eléctricas", level: 0.92, color: "#6BA368" },
+      { id: "skill-domotica", label: "Automatización hogareña", level: 0.82, color: "#A1E99D" },
+      { id: "skill-seguridad", label: "Seguridad eléctrica", level: 0.9, color: "#90C99F" },
+      { id: "skill-diagnostico", label: "Diagnóstico rápido", level: 0.85, color: "#CFE6CD" },
+    ],
+    reviews: [
+      {
+        id: "review-ana-1",
+        title: "Instalación de lámparas inteligentes",
+        contractor: "Marina Suárez",
+        date: "5 de febrero 2024",
+        rating: 4.8,
+        description:
+          "Ana explicó cada paso con mucha claridad y dejó todo funcionando perfecto. Super recomendada.",
+      },
+      {
+        id: "review-ana-2",
+        title: "Revisión tablero eléctrico",
+        contractor: "Diego Ramos",
+        date: "21 de enero 2024",
+        rating: 4.5,
+        description:
+          "Detectó un problema que otros técnicos no habían visto y lo resolvió al instante.",
+      },
+    ],
+  },
+  {
+    id: "contractor-123",
+    name: "Carlos Pérez",
+    location: "City Bell, Buenos Aires",
+    rating: 4.7,
+    completedJobs: 58,
+    generalScore: 0.88,
+    about:
+      "Contratante habitual de ChangaYa. Me enfoco en mantener relaciones de trabajo justas, pagar a tiempo y dejar reseñas detalladas para ayudar a otros trabajadores.",
+    topSkills: [
+      { id: "skill-planificacion", label: "Planificación", level: 0.84, color: "#6BA368" },
+      { id: "skill-comunicacion", label: "Comunicación", level: 0.88, color: "#A1E99D" },
+      { id: "skill-negociacion", label: "Negociación", level: 0.8, color: "#90C99F" },
+    ],
+    reviews: [
+      {
+        id: "review-carlos-1",
+        title: "Instalación de cortinas",
+        contractor: "María Rodríguez",
+        date: "8 de marzo 2024",
+        rating: 4.9,
+        description:
+          "Carlos fue claro con los requerimientos y pagó al instante. Excelente experiencia como contratante.",
+      },
+      {
+        id: "review-carlos-2",
+        title: "Pintura interior",
+        contractor: "Ana Martínez",
+        date: "30 de enero 2024",
+        rating: 4.6,
+        description:
+          "Muy organizado y respetuoso. Coordinamos horarios sin problema y la comunicación fue excelente.",
       },
     ],
   },
