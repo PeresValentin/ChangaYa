@@ -660,11 +660,7 @@ export default function InicioContratanteScreen() {
 
 
 
-/* =====================
 
-    Estilos (CORREGIDOS)
-
-   ===================== */
 
 const styles = StyleSheet.create({
 
@@ -720,7 +716,7 @@ const styles = StyleSheet.create({
 
   greeting: {
 
-    fontSize: FONT.lg, // CORREGIDO: de .xl a .lg
+    fontSize: FONT.lg, 
 
     fontWeight: "700" as const,
 
@@ -772,7 +768,7 @@ const styles = StyleSheet.create({
 
     borderRadius: RADIUS.lg,
 
-    padding: SPACING.lg, // Más padding
+    padding: SPACING.lg, 
 
     elevation: 5,
 
@@ -810,13 +806,13 @@ const styles = StyleSheet.create({
 
   sectionContainer: {
 
-    marginTop: SPACING.lg, // CORREGIDO: de .xl a .lg
+    marginTop: SPACING.lg, 
 
   },
 
   sectionHeader: {
 
-    marginTop: SPACING.lg, // CORREGIDO: de .xl a .lg
+    marginTop: SPACING.lg, 
 
     marginBottom: SPACING.md,
 
@@ -994,7 +990,7 @@ const styles = StyleSheet.create({
 
   },
 
-  badgeProgress: { // CORREGIDO: sin 's'
+  badgeProgress: { 
 
     paddingVertical: 4,
 
@@ -1086,7 +1082,7 @@ const styles = StyleSheet.create({
 
     shadowRadius: 8,
 
-    gap: SPACING.sm, // CORREGIDO: sin 'warning:'
+    gap: SPACING.sm, 
 
   },
 
@@ -1118,8 +1114,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: SPACING.lg,
 
-    backgroundColor: palette.white, // CORREGIDO: sin 'G'
-
+    backgroundColor: palette.white, 
     borderTopLeftRadius: RADIUS.lg,
 
     borderTopRightRadius: RADIUS.lg,

@@ -52,7 +52,7 @@ const DUMMY_JOB_DETAILS: JobDetails = {
     price: '$15.000',
     distance: 'A 0.5 km de tu ubicación',
     schedule: 'Necesario hoy',
-    icon: 'build-outline', // Ícono de llave inglesa (ajustar si es otro)
+    icon: 'build-outline', 
     description: 'Se rompió la canilla del baño y está perdiendo mucha agua. Necesito que alguien venga hoy mismo a arreglarlo. Tengo todas las herramientas necesarias.',
     requirements: [
         'Experiencia en plomería',
