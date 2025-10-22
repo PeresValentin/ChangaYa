@@ -4,13 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter, type Href } from 'expo-router'; // <-- MODIFICADO
 import React, { useState } from 'react';
 import {
-    FlatList,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity, // <-- AÑADIDO
-    View,
+	FlatList,
+	SafeAreaView,
+	StyleSheet,
+	Text,
+	TextInput,
+	TouchableOpacity, // <-- AÑADIDO
+	View,
 } from 'react-native';
 import ChatListItem, { Chat } from '../../components/ChatListItem';
 import theme from '../../constants/theme'; // <-- AÑADIDO
@@ -122,7 +122,18 @@ const ChatsScreen = () => {
 							<TouchableOpacity
 								key={item.id}
 								style={[styles.navItem, isActive && styles.navItemActive]}
-								onPress={() => router.push(item.route)}
+								onPress={() => {
+                                // SI es el botón de Home...
+                                if (item.id === 'home') {
+                                    // ¡CAMBIO! Simplemente retrocedemos a la pantalla anterior
+                                    router.back(); 
+                                } 
+                                // PARA CUALQUIER OTRO BOTÓN...
+                                else {
+                                    // Usamos la ruta definida en quickLinks (comportamiento original)
+                                    router.push(item.route);
+                                }
+                            }}
 							>
 								<Ionicons
 									name={item.icon}
