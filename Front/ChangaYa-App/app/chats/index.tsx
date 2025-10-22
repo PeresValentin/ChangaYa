@@ -42,10 +42,32 @@ const quickLinks: {
   icon: keyof typeof Ionicons.glyphMap;
   route: Href;
 }[] = [
+<<<<<<< HEAD
   { id: 'home', title: 'Home', icon: 'home-outline', route: '/home/trabajador' as Href },
   { id: 'chats', title: 'Chats', icon: 'chatbubble-ellipses-outline', route: '/chats' as Href },
   { id: 'mis-changas', title: 'Mis Changas', icon: 'briefcase-outline', route: '/changas' as Href },
   { id: 'perfil', title: 'Perfil', icon: 'person-circle-outline', route: '/perfil' as Href },
+=======
+	{ id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" as Href },
+	{
+		id: "chats",
+		title: "Chats",
+		icon: "chatbubble-ellipses-outline" as const,
+		route: "/chats" as Href,
+	},
+	{
+		id: "mis-changas",
+		title: "Mis Changas",
+		icon: "briefcase-outline" as const,
+		route: "/changas/mis" as Href,
+	},
+	{
+		id: "perfil",
+		title: "Perfil",
+		icon: "person-circle-outline" as const,
+		route: "/profile" as Href,
+	},
+>>>>>>> origin/main
 ];
 
 const ChatsScreen = () => {
