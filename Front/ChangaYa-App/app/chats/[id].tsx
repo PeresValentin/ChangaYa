@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 
 // --- Datos de Ejemplo ---
 // (Reemplazar con tu lógica de Supabase)
@@ -21,8 +22,9 @@ import {
 // Simulamos los detalles del chat que abrimos
 // En la vida real, harías un fetch a Supabase usando el 'id'
 const DUMMY_CHAT_DETAILS = {
-    id: '1', 
-    user: 'Ana Martínez', 
+    id: '1',
+    userId: 'worker-002',
+    user: 'Ana Martínez',
     avatar: 'AM', // Podría ser una URL a una imagen
     online: true,
 };
@@ -104,6 +106,7 @@ const ChatScreen = () => {
     // 1. OBTENER EL ID DEL CHAT
     // 'useLocalSearchParams' lee los parámetros de la URL, en este caso, el '[id]'
     const { id } = useLocalSearchParams();
+    const { goToProfile } = useProfileNavigation();
     
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -159,12 +162,12 @@ const ChatScreen = () => {
         >
             {/* 4. CONFIGURACIÓN DEL HEADER */}
             {/* Usamos Stack.Screen para configurar el header de esta ruta dinámica */}
-            <Stack.Screen 
+            <Stack.Screen
                 options={{
                     // Esto recrea el header de tu captura
                     headerTitle: () => (
                         <View style={styles.headerContainer}>
-                            <Image style={styles.headerAvatar} source={{ uri: 'https://via.placeholder.com/40' }} /> 
+                            <Image style={styles.headerAvatar} source={{ uri: 'https://via.placeholder.com/40' }} />
                             <View>
                                 <Text style={styles.headerTitle}>{DUMMY_CHAT_DETAILS.user}</Text>
                                 <Text style={styles.headerSubtitle}>En línea</Text>
@@ -172,9 +175,18 @@ const ChatScreen = () => {
                         </View>
                     ),
                     headerRight: () => (
-                        <TouchableOpacity style={{ marginRight: 15 }}>
-                            <Ionicons name="ellipsis-vertical" size={24} color="#333" />
-                        </TouchableOpacity>
+                        <View style={styles.headerActions}>
+                            <TouchableOpacity
+                                style={styles.headerIconButton}
+                                onPress={() => goToProfile(DUMMY_CHAT_DETAILS.userId)}
+                                accessibilityLabel="Ver perfil"
+                            >
+                                <Ionicons name="person-circle-outline" size={24} color="#333" />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.headerIconButton}>
+                                <Ionicons name="ellipsis-vertical" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
                     ),
                     headerBackTitle: '', // Esto pone un texto vacío en el botón 'Atrás' de iOS // Oculta el texto "Atrás" en iOS
                     headerShadowVisible: false, // Quita la sombra
@@ -247,6 +259,15 @@ const styles = StyleSheet.create({
     headerSubtitle: {
         fontSize: 13,
         color: '#555',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 15,
+        gap: 8,
+    },
+    headerIconButton: {
+        padding: 6,
     },
     // Lista de Mensajes
     messageList: {

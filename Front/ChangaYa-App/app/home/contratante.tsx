@@ -11,6 +11,9 @@ import {
 } from "react-native";
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
+
+import { useProfileNavigation } from "../../hooks/use-profile-navigation";
+
 // CONSTANTES DEL TEMA
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -95,7 +98,9 @@ const quickLinks: {
     id: "perfil",
     title: "Perfil",
     icon: "person-circle-outline" as const,
-    route: "/profile" as Href,
+
+    route: "/perfil" as Href,
+
   },
 ];
 // =========================================================
@@ -103,8 +108,15 @@ const quickLinks: {
 // =========================================================
 export default function InicioContratanteScreen() {
   const router = useRouter();
-  const pathname = usePathname(); 
+
+  const pathname = usePathname();
+
   const initials = useMemo(() => "María".charAt(0), []);
+
+  const { goToProfile } = useProfileNavigation();
+
+
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -287,19 +299,23 @@ export default function InicioContratanteScreen() {
                 key={item.id}
                 style={[styles.navItem, isActive && styles.navItemActive]}
                   onPress={() => {
+                    if (item.id === 'perfil') {
+                        goToProfile();
+                        return;
+                    }
                     // SI es el botón de Chats...
                     if (item.id === 'chats') {
                         // Navegamos a /chats y enviamos la ruta de regreso
-                        router.push({ 
-                            pathname: '/chats', 
+                        router.push({
+                            pathname: '/chats',
                             params: { returnHome: '/home/contratante' } // <-- Parámetro clave
                         });
-                    } 
+                    }
                     // SI es el botón de Home...
                     else if (item.id === 'home') {
                         // ¡CAMBIO! Simplemente retrocedemos
-                        router.back(); 
-                    } 
+                        router.back();
+                    }
                     // PARA CUALQUIER OTRO BOTÓN...
                     else {
                         // Usamos la ruta definida en quickLinks

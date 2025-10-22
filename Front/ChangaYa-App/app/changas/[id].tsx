@@ -11,7 +11,9 @@ import {
     View
 } from 'react-native';
 // Hooks de Expo Router para leer parámetros y configurar el header
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
+
+import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme'; // Importamos tu tema
 
 // Constantes del tema
@@ -21,6 +23,15 @@ const palette = theme.Colors.light;
 // =========================================================
 // INTERFACE Y DATOS DE EJEMPLO (Reemplazar con Supabase)
 // =========================================================
+interface PersonSummary {
+    id: string;
+    initials: string;
+    name: string;
+    rating: number;
+    reviews: number;
+    memberSince: string;
+}
+
 interface JobDetails {
     id: string;
     title: string;
@@ -31,13 +42,8 @@ interface JobDetails {
     icon: keyof typeof Ionicons.glyphMap;
     description: string;
     requirements: string[];
-    contractor: {
-        initials: string;
-        name: string;
-        rating: number;
-        reviews: number;
-        memberSince: string;
-    };
+      contractor: PersonSummary;
+    assignedWorker?: PersonSummary;
     location: {
         address: string;
         walkingTime: string;
@@ -60,6 +66,15 @@ const DUMMY_JOB_DETAILS: JobDetails = {
         'Herramientas propias (opcional)',
     ],
     contractor: {
+        id: 'contractor-123',
+        initials: 'CP',
+        name: 'Carlos Pérez',
+        rating: 4.7,
+        reviews: 24,
+        memberSince: 'enero 2022',
+    },
+    assignedWorker: {
+        id: 'worker-001',
         initials: 'MR',
         name: 'María Rodríguez',
         rating: 4.8,
@@ -76,10 +91,9 @@ const DUMMY_JOB_DETAILS: JobDetails = {
 // COMPONENTE PRINCIPAL
 // =========================================================
 const JobDetailsScreen = () => {
-    const router = useRouter();
-    // 1. Obtenemos el 'id' de la URL usando Expo Router
-    const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>(); // <-- MODIFICADO 
-    
+     const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>(); // <-- MODIFICADO
+    const { goToProfile } = useProfileNavigation();
+
     // Estado para guardar los detalles de la changa
     const [jobDetails, setJobDetails] = useState<JobDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -137,6 +151,15 @@ const JobDetailsScreen = () => {
     }
 
     // --- Renderizado Principal ---
+    const isContractorView = viewMode === 'contratante';
+    const profileSubject: PersonSummary =
+        isContractorView && jobDetails.assignedWorker
+            ? jobDetails.assignedWorker
+            : jobDetails.contractor;
+    const profileSectionTitle = isContractorView && jobDetails.assignedWorker
+        ? 'Trabajador asignado'
+        : 'Contratante';
+
     return (
         <SafeAreaView style={styles.safeArea}>
             {/* 3. Configuración del Header (usando Stack.Screen) */}
@@ -203,32 +226,31 @@ const JobDetailsScreen = () => {
 
                 {/* --- Contratante --- */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Contratante</Text>
+                    <Text style={styles.sectionTitle}>{profileSectionTitle}</Text>
                     <View style={styles.contractorCard}>
                         <View style={styles.contractorAvatar}>
-                            <Text style={styles.contractorInitials}>{jobDetails.contractor.initials}</Text>
+                            <Text style={styles.contractorInitials}>{profileSubject.initials}</Text>
                         </View>
                         <View style={styles.contractorInfo}>
-                            <Text style={styles.contractorName}>{jobDetails.contractor.name}</Text>
+                            <Text style={styles.contractorName}>{profileSubject.name}</Text>
                             <View style={styles.ratingRow}>
                                 <Ionicons name="star" size={14} color="#FFC107" />
                                 <Text style={styles.ratingText}>
-                                    {jobDetails.contractor.rating} ({jobDetails.contractor.reviews} reseñas)
+                                    {profileSubject.rating} ({profileSubject.reviews} reseñas)
                                 </Text>
                             </View>
                             <Text style={styles.memberSinceText}>
-                                Miembro desde {jobDetails.contractor.memberSince}
+                                Miembro desde {profileSubject.memberSince}
                             </Text>
                         </View>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.profileButton}
-                            // onPress={() => router.push(`/profile/${contractorId}`)} // Futura navegación
+                            onPress={() => goToProfile(profileSubject.id)}
                         >
                             <Text style={styles.profileButtonText}>Ver perfil</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-
                 {/* --- Ubicación --- */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Ubicación</Text>

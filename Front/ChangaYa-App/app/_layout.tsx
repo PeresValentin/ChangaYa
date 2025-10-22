@@ -15,14 +15,20 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/login" options={{ headerShown: false }}/>
-      <Stack.Screen name="auth/register" options={{ headerShown: false }}/>
-      <Stack.Screen name="home/trabajador" options={{ headerShown: false }} />
-      <Stack.Screen name="home/contratante" options={{ headerShown: false }} />
-      <Stack.Screen name="chats/index" options={{ headerShown: false }} />
-    </Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/register" options={{ headerShown: false }} />
+        <Stack.Screen name="home/trabajador" options={{ headerShown: false }} />
+        <Stack.Screen name="home/contratante" options={{ headerShown: false }} />
+        <Stack.Screen name="chats/index" options={{ headerShown: false }} />
+        <Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="changas/favoritas" options={{ headerShown: false }} />
+        <Stack.Screen name="changas/mis" options={{ headerShown: false }} />
+        <Stack.Screen name="changas/nueva" options={{ headerShown: false }} />
+        <Stack.Screen name="changas/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="modal" options={{ headerShown: false }} />
+      </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
   );

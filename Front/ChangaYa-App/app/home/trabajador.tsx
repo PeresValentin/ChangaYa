@@ -13,7 +13,7 @@ import {
 
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
-
+import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
@@ -83,14 +83,28 @@ const quickLinks: {
     id: "perfil",
     title: "Perfil",
     icon: "person-circle-outline" as const,
-    route: "/profile" as Href,
+    route: "/perfil" as Href,
   },
 ];
 export default function InicioTrabajadorScreen() {
   const router = useRouter();
   const pathname = usePathname();
-  const initials = useMemo(() => "Juan".charAt(0), []);
+  
   const [searchQuery, setSearchQuery] = useState("");
+  
+  
+  const { goToProfile, currentUser } = useProfileNavigation();
+
+  // Calculamos iniciales desde el nombre real (ej. María Rodríguez)
+  const initials = useMemo(() => {
+  if (!currentUser?.name) return "?";
+  return currentUser.name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+}, [currentUser?.name]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -100,20 +114,23 @@ export default function InicioTrabajadorScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <View style={styles.greetingRow}>
-                <Text style={styles.greeting}>¡Hola Juan!</Text>
-                <HelloWave />
-              </View>
-              <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
-            </View>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <View style={styles.greetingRow}>
+              <Text style={styles.greeting}>¡Hola {currentUser.name.split(" ")[0]}!
+              </Text>
+                 <HelloWave />
+        </View>
+    <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
+  </View>
 
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>{initials}</Text>
-            </View>
-          </View>
+  <TouchableOpacity
+    style={styles.avatar}
+    onPress={() => goToProfile(currentUser.id)} // Tocar avatar abre el perfil
+  >
+    <Text style={styles.avatarInitial}>{initials}</Text>
+  </TouchableOpacity>
+</View>
 
           {/* Barra de búsqueda */}
           <View style={styles.searchWrapper}>
@@ -229,7 +246,14 @@ export default function InicioTrabajadorScreen() {
               <TouchableOpacity
                 key={item.id}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => router.push(item.route)}
+                onPress={() => {
+                  if (item.id === "perfil") {
+                    goToProfile();
+                    return;
+                  }
+
+                  router.push(item.route);
+                }}
               >
               
                 <Ionicons
