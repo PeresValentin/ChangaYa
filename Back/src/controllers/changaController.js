@@ -25,7 +25,7 @@ export const createChanga = async (req, res) => {
           remuneracion,
           horaInicio,
           horaFin,
-          estado: 'iniciado',
+          estado: 'iniciada',
           [columnaRol]: user.id  // asignamos automáticamente el ID del JWT
         }
       ])
