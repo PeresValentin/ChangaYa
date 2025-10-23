@@ -12,10 +12,9 @@ import { verificarToken } from '../middleware/authMiddleware.js'
 
 const router = express.Router()
 
-// 🔓 (si querés mostrar changas públicas)
-router.get('/iniciadas', getChangasIniciadas)
 
 // 🔒 protegidas
+router.get('/iniciadas', verificarToken, getChangasIniciadas)
 router.post('/', verificarToken, createChanga)
 router.get('/trabajador', verificarToken, getChangasByTrabajador)
 router.get('/contratante', verificarToken, getChangasByContratante)
