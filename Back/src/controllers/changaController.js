@@ -47,7 +47,7 @@ export const getChangasIniciadas = async (req, res) => {
     const { data, error } = await supabase
       .from('Changa')
       .select('*')
-      .eq('estado', 'iniciado')
+      .eq('estado', 'iniciada')
 
     if (error) throw error
     res.status(200).json(data)
