@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -12,6 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
+import axios from "axios";
+
 
 export default function RegisterScreen() {
   const palette = theme.Colors.light;
@@ -21,10 +24,46 @@ export default function RegisterScreen() {
 
   const router = useRouter();
 
+  const [name, setName] = useState("");
+  const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dni, setDni] = useState("");
   const [password, setPassword] = useState("");
+
+  const handleRegister = async () => {
+    if (!acceptTerms) {
+      Alert.alert("Debes aceptar los términos y condiciones");
+      return;
+    }
+
+    try {
+      const response = await axios.post("http://192.168.0.194:3000/api/usuarios", {
+        nombreUsuario: email.split("@")[0], // o pedí un campo específico si lo tenés
+        clave: password,
+        nombre: name,
+        apellido: lastname,
+        dni: dni,
+        email: email,
+        telefono: phone,
+        tipoUsuario: userType === "worker" ? "trabajador" : "contratante"
+      }, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        Alert.alert("✅ Registro exitoso", "Por favor, valida tu email antes de iniciar sesión.");
+        router.push("/auth/login");
+      } else {
+        Alert.alert("Error", `Respuesta inesperada (${response.status})`);
+      }
+    } catch (error: any) {
+      console.log("Detalles del error:", error.response?.data || error.message);
+      Alert.alert("Error", "No se pudo registrar el usuario");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -112,11 +151,15 @@ export default function RegisterScreen() {
       <View style={styles.form}>
         <View style={styles.row}>
           <TextInput
+            value={name}
+            onChangeText={setName}
             placeholder="Nombre"
             style={styles.input}
             placeholderTextColor={palette.muted}
           />
           <TextInput
+            value={lastname}
+            onChangeText={setLastname}
             placeholder="Apellido"
             style={styles.input}
             placeholderTextColor={palette.muted}
@@ -184,7 +227,7 @@ export default function RegisterScreen() {
       {/* Botón */}
       <PrimaryButton
         title="CREAR CUENTA"
-        onPress={() => router.push("/auth/login")}
+        onPress={handleRegister}
         style={styles.btnWrapper}
         disabled={!acceptTerms} // Solo habilitado si acepta términos
       />
