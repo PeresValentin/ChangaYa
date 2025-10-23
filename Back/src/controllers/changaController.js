@@ -6,16 +6,25 @@ import { supabase } from '../config/supabaseClient.js'
  */
 export const createChanga = async (req, res) => {
   try {
-    const user = req.user  // viene del JWT
+    const user = req.user // viene del JWT
     const { titulo, descripcion, remuneracion, horaInicio, horaFin } = req.body
 
+    // Validar que el usuario esté logueado
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario no autenticado' })
+    }
+
+    // Validar que sea contratante
+    if (user.rol !== 'contratante') {
+      return res.status(403).json({ error: 'Solo los contratantes pueden crear changas' })
+    }
+
+    // Validar campos obligatorios
     if (!titulo || !descripcion || !remuneracion) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
     }
 
-    // Definir rol y columna correspondiente
-    const columnaRol = user.rol === 'trabajador' ? 'trabajadorID' : 'contratanteID'
-
+    // Crear changa con contratanteID del JWT
     const { data, error } = await supabase
       .from('Changa')
       .insert([
@@ -25,14 +34,18 @@ export const createChanga = async (req, res) => {
           remuneracion,
           horaInicio,
           horaFin,
-          estado: 'iniciado',
-          [columnaRol]: user.id  // asignamos automáticamente el ID del JWT
+          contratanteID: user.id,   // ✅ ID sacado del JWT
         }
       ])
       .select()
 
     if (error) throw error
-    res.status(201).json({ message: 'Changa creada correctamente', data })
+
+    res.status(201).json({
+      message: 'Changa creada correctamente',
+      data
+    })
+
   } catch (err) {
     console.error('❌ Error al crear changa:', err)
     res.status(500).json({ error: err.message })
@@ -40,14 +53,14 @@ export const createChanga = async (req, res) => {
 }
 
 /**
- * ✅ Obtener changas con estado "iniciado"
+ * ✅ Obtener changas con estado "iniciada"
  */
 export const getChangasIniciadas = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('Changa')
       .select('*')
-      .eq('estado', 'iniciado')
+      .eq('estado', 'iniciada')
 
     if (error) throw error
     res.status(200).json(data)
