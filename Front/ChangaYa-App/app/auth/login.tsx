@@ -6,27 +6,79 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Alert,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 
 export default function LoginScreen() {
   const palette = theme.Colors.light;
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [userType, setUserType] = useState<"trabajador" | "contratante">("trabajador");
-
   const router = useRouter();
 
-  // Manejo de navegación según el tipo de usuario
-  const handleLogin = () => {
-    const destination =
-      userType === "trabajador" ? "/home/trabajador" : "/home/contratante";
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Campos incompletos", "Por favor completa ambos campos.");
+      return;
+    }
 
-    router.push(destination as any); // 👈 Se castea a `any` por limitaciones de TS en expo-router
+    try {
+      const response = await axios.post(
+        "http://192.168.0.194:3000/api/usuarios/login",
+        {
+          email: email,
+          clave: password,
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      const { token, user, message } = response.data;
+
+      if (!token || !user) {
+        Alert.alert("Error", "Respuesta inesperada del servidor.");
+        return;
+      }
+
+      // ✅ Guardar el JWT de forma persistente
+      await AsyncStorage.setItem("jwtToken", token);
+      await AsyncStorage.setItem("userData", JSON.stringify(user));
+
+      console.log("Token guardado:", token);
+      console.log("Usuario:", user);
+
+      // 🚀 Redirección según tipoUsuario
+      switch (user.tipoUsuario) {
+        case "trabajador":
+          router.push("/home/trabajador");
+          break;
+        case "contratante":
+          router.push("/home/contratante");
+          break;
+        case "admin":
+          router.push("/auth/welcome");
+          break;
+        default:
+          Alert.alert("Error", "Tipo de usuario desconocido.");
+          break;
+      }
+    } catch (error: any) {
+      console.error("Error de login:", error.response?.data || error.message);
+
+      if (error.response?.data?.error === "Contraseña incorrecta") {
+        Alert.alert("Credenciales inválidas", "La contraseña es incorrecta.");
+      } else if (error.response?.status === 404) {
+        Alert.alert("Usuario no encontrado", "Revisa tu email o teléfono.");
+      } else {
+        Alert.alert("Error de conexión", "No se pudo contactar con el servidor.");
+      }
+    }
   };
 
   return (
@@ -43,7 +95,7 @@ export default function LoginScreen() {
       {/* Formulario */}
       <View style={styles.form}>
         <TextInput
-          placeholder="Email o teléfono"
+          placeholder="Email"
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
@@ -60,43 +112,6 @@ export default function LoginScreen() {
         />
         <TouchableOpacity>
           <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Selector de rol */}
-      <View style={styles.roleToggle}>
-        <TouchableOpacity
-          style={[
-            styles.roleOption,
-            userType === "trabajador" && styles.roleOptionActive,
-          ]}
-          onPress={() => setUserType("trabajador")}
-        >
-          <Text
-            style={[
-              styles.roleOptionText,
-              userType === "trabajador" && styles.roleOptionTextActive,
-            ]}
-          >
-            Trabajador
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.roleOption,
-            userType === "contratante" && styles.roleOptionActive,
-          ]}
-          onPress={() => setUserType("contratante")}
-        >
-          <Text
-            style={[
-              styles.roleOptionText,
-              userType === "contratante" && styles.roleOptionTextActive,
-            ]}
-          >
-            Contratante
-          </Text>
         </TouchableOpacity>
       </View>
 

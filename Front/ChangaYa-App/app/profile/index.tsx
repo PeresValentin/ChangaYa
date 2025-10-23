@@ -23,7 +23,7 @@ const fontFamilies = theme.Fonts;
 
 const USER_PROFILE = {
   id: "worker-001", // añadido para coherencia con los perfiles públicos mockeados
-  name: "María Rodríguez",
+  name: "Rafael Eguren",
   location: "La Plata, Buenos Aires",
   rating: 4.8,
   completedJobs: 132,
