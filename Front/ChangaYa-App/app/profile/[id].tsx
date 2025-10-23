@@ -36,7 +36,7 @@ type PublicProfile = {
 const MOCK_PROFILES: PublicProfile[] = [
   {
     id: "worker-001",
-    name: "María Rodríguez",
+    name: "Rafael Eguren",
     location: "La Plata, Buenos Aires",
     rating: 4.8,
     completedJobs: 132,
