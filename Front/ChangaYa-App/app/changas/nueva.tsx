@@ -3,7 +3,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+    Alert,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -50,13 +53,56 @@ const CrearChangaScreen = () => {
     };
 
     // TODO: Implementar lógica para publicar la changa
-    const handlePublish = () => {
-        console.log('Publicar Changa:', { categoria, titulo, descripcion, precio, esUrgente, fecha, hora, ubicacion, requisitos });
-        // Aquí iría la validación de datos
-        // Y la llamada a Supabase para insertar la nueva changa
-        // Si es exitoso:
-        // router.replace('/home/contratante'); // O a donde quieras redirigir
-    };
+    const handlePublish = async () => {
+        // Validaciones básicas
+        if (!titulo || !descripcion || !precio) {
+            Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
+            return;
+        }
+
+        try {
+            // Obtener token almacenado en AsyncStorage
+            const token = await AsyncStorage.getItem("jwtToken");
+            if (!token) {
+            Alert.alert("Error", "No hay sesión activa. Volvé a iniciar sesión.");
+            router.replace("/auth/login");
+            return;
+            }
+
+            // Construir el payload
+            const nuevaChanga = {
+            titulo,
+            descripcion,
+            remuneracion: parseFloat(precio),
+            horaInicio: new Date().toISOString(), // Podés ajustarlo con tus campos de fecha/hora reales
+            horaFin: new Date().toISOString(),
+            };
+
+            console.log("Enviando changa:", nuevaChanga);
+
+            // Hacer la petición POST
+            const response = await axios.post(
+            "http://192.168.0.194:3000/api/changas",
+            nuevaChanga,
+            {
+                headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                },
+            }
+            );
+
+            if (response.status === 201 || response.status === 200) {
+            Alert.alert("✅ Changa publicada", "Tu changa fue creada con éxito.");
+            router.replace("/home/contratante");
+            } else {
+            Alert.alert("Error", `El servidor respondió con código ${response.status}`);
+            }
+        } catch (error: any) {
+            console.error("Error al publicar changa:", error.response?.data || error.message);
+            Alert.alert("Error", error.response?.data?.error || "No se pudo crear la changa");
+        }
+        };
     
     // TODO: Lógica para añadir un requisito (simplificada)
     const handleAddRequisito = () => {
