@@ -29,6 +29,9 @@ const CATEGORIAS = ['Plomería', 'Limpieza', 'Delivery', 'Hogar', 'Mascotas', 'O
 // COMPONENTE PRINCIPAL DEL FORMULARIO
 // =========================================================
 const CrearChangaScreen = () => {
+
+    const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
     const router = useRouter();
     const { categoria: categoriaParam } = useLocalSearchParams<{ categoria?: string }>(); 
     const [categoria, setCategoria] = useState<string>(categoriaParam || '');
@@ -82,7 +85,7 @@ const CrearChangaScreen = () => {
 
             // Hacer la petición POST
             const response = await axios.post(
-            "http://192.168.0.194:3000/api/changas",
+            `${API_URL}/api/changas`,
             nuevaChanga,
             {
                 headers: {

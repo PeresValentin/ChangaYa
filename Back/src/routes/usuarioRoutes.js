@@ -17,7 +17,7 @@ router.post('/', createUsuario)
 router.post('/login', loginUsuario)
 router.get('/verificar', verificarUsuario)
 
-// 🔒 Rutas protegidas (requieren token)
+// Rutas protegidas (requieren token)
 router.get('/', verificarToken, getUsuarios)
 router.get('/:id', verificarToken, getUsuarioById)
 router.put('/:id', verificarToken, updateUsuario)

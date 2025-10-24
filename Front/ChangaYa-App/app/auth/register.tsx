@@ -17,13 +17,14 @@ import axios from "axios";
 
 
 export default function RegisterScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
   const palette = theme.Colors.light;
   const [userType, setUserType] = useState<"worker" | "employer">("worker");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [subscribe, setSubscribe] = useState(false);
 
   const router = useRouter();
-
   const [name, setName] = useState("");
   const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
@@ -38,7 +39,7 @@ export default function RegisterScreen() {
     }
 
     try {
-      const response = await axios.post("http://192.168.0.194:3000/api/usuarios", {
+      const response = await axios.post(`${API_URL}/api/usuarios`, {
         nombreUsuario: email.split("@")[0], // o pedí un campo específico si lo tenés
         clave: password,
         nombre: name,

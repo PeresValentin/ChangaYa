@@ -9,6 +9,8 @@ import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 
 export default function WelcomeScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
   const palette = theme.Colors.light;
    const router = useRouter();   
 

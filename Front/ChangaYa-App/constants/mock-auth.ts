@@ -9,5 +9,5 @@ export type MockUser = {
 export const MOCK_CURRENT_USER: MockUser = {
   id: 'worker-001',
   role: 'trabajador',
-  name: 'María Rodríguez',
+  name: 'Rafael Eguren',
 };

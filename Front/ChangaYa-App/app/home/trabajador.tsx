@@ -52,6 +52,7 @@ const quickLinks: {
   },
 ];
 export default function InicioTrabajadorScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   
   const router = useRouter();
   const pathname = usePathname();
@@ -72,7 +73,7 @@ export default function InicioTrabajadorScreen() {
         }
 
         const response = await axios.get(
-          "http://192.168.0.194:3000/api/changas/iniciadas",
+          `${API_URL}/api/changas/iniciadas`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }

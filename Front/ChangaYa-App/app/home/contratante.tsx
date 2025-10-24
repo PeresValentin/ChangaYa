@@ -47,29 +47,7 @@ const quickActions = [
     route: "/changas/nueva?categoria=envios",
   },
 ];
-const activeJobs = [
-  {
-    id: "plomero-bano",
-    title: "Plomero - Baño",
-    description: "Reparar canilla que gotea",
-    price: "$8.000",
-    due: "Para hoy",
-    estado: "Esperando trabajador",
-    postulantes: 3,
-    icon: "build-outline" as const,
-  },
-  {
-    id: "limpieza-general",
-    title: "Limpieza General",
-    description: "Casa de 3 ambientes",
-    price: "$12.000",
-    due: "Mañana",
-    estado: "En progreso",
-    trabajador: "Ana López",
-    rating: 4.9,
-    icon: "home-outline" as const,
-  },
-];
+
 const summaryData = {
   completadas: 8,
   calificacion: 4.8,
@@ -111,11 +89,13 @@ const quickLinks: {
 // COMPONENTE PRINCIPAL
 // =========================================================
 export default function InicioContratanteScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
   const router = useRouter();
   
   const pathname = usePathname();
 
-  const initials = useMemo(() => "María".charAt(0), []);
+  const initials = useMemo(() => "Valentin".charAt(0), []);
 
   const { goToProfile } = useProfileNavigation();
 
@@ -133,7 +113,7 @@ export default function InicioContratanteScreen() {
         }
 
         const response = await axios.get(
-          "http://192.168.0.194:3000/api/changas/contratante",
+          `${API_URL}/api/changas/contratante`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
