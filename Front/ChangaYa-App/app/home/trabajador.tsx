@@ -1,7 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  Alert,
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,50 +18,11 @@ import {
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
 import { useProfileNavigation } from "../../hooks/use-profile-navigation";
+
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
 type JobVariant = "primary" | "secondary";
-
-// Lista de changas cercanas (ejemplo hardcodeado)
-const nearbyJobs = [
-  {
-    id: "plomero",
-    title: "Plomero",
-    description: "Reparación de caño roto",
-    distance: "A 1.2 km",
-    schedule: "Para hoy",
-    price: "$8.000",
-    rating: "⭐️ 4.8 (23 reseñas)",
-    icon: "construct-outline" as const,
-    actionLabel: "Postular",
-    variant: "primary" as JobVariant,
-  },
-  {
-    id: "limpieza",
-    title: "Limpieza",
-    description: "Limpieza profunda casa",
-    distance: "A 2.1 km",
-    schedule: "Para mañana",
-    price: "$6.500",
-    rating: "⭐️ 4.5 (15 reseñas)",
-    icon: "sparkles-outline" as const,
-    actionLabel: "Postular",
-    variant: "primary" as JobVariant,
-  },
-  {
-    id: "delivery",
-    title: "Delivery",
-    description: "Entrega de paquetes zona centro",
-    distance: "A 1 km",
-    schedule: "Para hoy",
-    price: "$5.200",
-    rating: "⭐️ 4.9 (45 reseñas)",
-    icon: "bicycle-outline" as const,
-    actionLabel: "Saber más",
-    variant: "secondary" as JobVariant,
-  },
-];
 
 // Navegación inferior rápida
 const quickLinks: {
@@ -87,12 +52,46 @@ const quickLinks: {
   },
 ];
 export default function InicioTrabajadorScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  
   const router = useRouter();
   const pathname = usePathname();
   
   const [searchQuery, setSearchQuery] = useState("");
   
-  
+  const [changas, setChangas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchChangasIniciadas = async () => {
+      try {
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token) {
+          Alert.alert("Sesión expirada", "Iniciá sesión nuevamente.");
+          router.replace("/auth/login");
+          return;
+        }
+
+        const response = await axios.get(
+          `${API_URL}/api/changas/iniciadas`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setChangas(response.data); // el backend debería devolver un array
+      } catch (error: any) {
+        console.error("Error al obtener changas:", error.response?.data || error.message);
+        Alert.alert("Error", "No se pudieron cargar las changas disponibles.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChangasIniciadas();
+  }, []);
+
+
   const { goToProfile, currentUser } = useProfileNavigation();
 
   // Calculamos iniciales desde el nombre real (ej. María Rodríguez)
@@ -163,74 +162,65 @@ export default function InicioTrabajadorScreen() {
           </View>
 
           <View style={styles.cardList}>
-            {nearbyJobs.map((job) => (
-              <TouchableOpacity key={job.id} style={styles.card} activeOpacity={0.7}
-            onPress={() =>
-              router.push({ 
-              pathname: "/changas/[id]", // <-- Usá el patrón [id]
-              params: { id: job.id, viewMode: 'trabajador' } // <-- Pasá 'id' y 'viewMode' acá
-              })
-            }>
-                <View style={styles.cardContent}>
-                  <View style={styles.cardIconWrapper}>
-                    <Ionicons name={job.icon} size={22} color={palette.tint} />
-                  </View>
-
-                  <View style={styles.cardInfo}>
-                    {/* Header de la card: título + favorito */}
-                    <View style={styles.cardHeader}>
-                      <Text style={styles.cardTitle}>{job.title}</Text>
-                      <TouchableOpacity style={styles.favoriteButton}>
-                        <Ionicons name="heart-outline" size={20} color={palette.tint} />
-                      </TouchableOpacity>
+            {loading ? (
+              <ActivityIndicator size="large" color={palette.tint} />
+            ) : changas.length === 0 ? (
+              <Text style={styles.emptyText}>No hay changas iniciadas disponibles.</Text>
+            ) : (
+              changas.map((changa) => (
+                <TouchableOpacity
+                  key={changa.changaID}
+                  style={styles.card}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/changas/[id]",
+                      params: { id: changa.changaID, viewMode: "trabajador" },
+                    })
+                  }
+                >
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardIconWrapper}>
+                      <Ionicons name="construct-outline" size={22} color={palette.tint} />
                     </View>
 
-                    <Text style={styles.cardDescription}>{job.description}</Text>
-
-                    {/* Chips con info extra */}
-                    <View style={styles.chipRow}>
-                      <View style={styles.infoChip}>
-                        <Ionicons name="location-outline" size={14} color={palette.tint} />
-                        <Text style={styles.infoChipText}>{job.distance}</Text>
+                    <View style={styles.cardInfo}>
+                      {/* Header de la card */}
+                      <View style={styles.cardHeader}>
+                        <Text style={styles.cardTitle}>{changa.titulo}</Text>
+                        <TouchableOpacity style={styles.favoriteButton}>
+                          <Ionicons name="heart-outline" size={20} color={palette.tint} />
+                        </TouchableOpacity>
                       </View>
 
-                      <View style={styles.infoChip}>
-                        <Ionicons name="time-outline" size={14} color={palette.tint} />
-                        <Text style={styles.infoChipText}>{job.schedule}</Text>
+                      <Text style={styles.cardDescription}>{changa.descripcion}</Text>
+
+                      {/* Chips */}
+                      <View style={styles.chipRow}>
+                        <View style={styles.infoChip}>
+                          <Ionicons name="time-outline" size={14} color={palette.tint} />
+                          <Text style={styles.infoChipText}>
+                            {new Date(changa.horaInicio).toLocaleDateString()}
+                          </Text>
+                        </View>
+
+                        <View style={styles.infoChip}>
+                          <Ionicons name="cash-outline" size={14} color={palette.tint} />
+                          <Text style={styles.infoChipText}>${changa.remuneracion}</Text>
+                        </View>
                       </View>
 
-                      <View style={styles.infoChip}>
-                        <Ionicons name="cash-outline" size={14} color={palette.tint} />
-                        <Text style={styles.infoChipText}>{job.price}</Text>
+                      {/* Footer */}
+                      <View style={styles.cardFooter}>
+                        <TouchableOpacity style={styles.cardAction}>
+                          <Text style={styles.cardActionText}>Ver detalles</Text>
+                        </TouchableOpacity>
                       </View>
-                    </View>
-
-                    {/* Footer de la card: rating + acción */}
-                    <View style={styles.cardFooter}>
-                      <Text style={styles.rating}>{job.rating}</Text>
-                      <TouchableOpacity
-                        style={[
-                          styles.cardAction,
-                          job.variant === "secondary" && styles.cardActionSecondary,
-                        ]}
-                        onPress={() =>
-                          router.push({ pathname: "/changas/[id]", params: { id: job.id } })
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.cardActionText,
-                            job.variant === "secondary" && styles.cardActionTextSecondary,
-                          ]}
-                        >
-                          {job.actionLabel}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </ScrollView>
 
@@ -441,6 +431,13 @@ const styles = StyleSheet.create({
 
   cardActionTextSecondary: { color: palette.white },
 
+  emptyText: {
+    textAlign: "center",
+    color: palette.muted,
+    fontSize: FONT.md,
+    marginVertical: SPACING.lg,
+  },
+
   /* ---------- Bottom nav ---------- */
   bottomNav: {
     flexDirection: "row",
@@ -475,3 +472,4 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tint,
   },
 });
+

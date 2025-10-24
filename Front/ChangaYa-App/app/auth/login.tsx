@@ -16,6 +16,7 @@ import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 
 export default function LoginScreen() {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const palette = theme.Colors.light;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +30,7 @@ export default function LoginScreen() {
 
     try {
       const response = await axios.post(
-        "http://192.168.0.194:3000/api/usuarios/login",
+        `${API_URL}/api/usuarios/login`,
         {
           email: email,
           clave: password,

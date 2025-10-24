@@ -6,8 +6,8 @@ import { transporter } from '../config/mailer.js'
 const JWT_EMAIL_SECRET = process.env.JWT_EMAIL_SECRET
 const JWT_SECRET = process.env.JWT_SECRET
 
-// ✅ Obtener todos los usuarios
-// ✅ Obtener todos los usuarios
+// Obtener todos los usuarios
+// Obtener todos los usuarios
 export const getUsuarios = async (req, res) => {
   try {
     // Solo admin puede ver todos los usuarios
@@ -24,7 +24,7 @@ export const getUsuarios = async (req, res) => {
   }
 }
 
-// ✅ Obtener un usuario por ID
+// Obtener un usuario por ID
 export const getUsuarioById = async (req, res) => {
   const { id } = req.params
 
@@ -43,7 +43,7 @@ export const getUsuarioById = async (req, res) => {
   res.json(data)
 }
 
-// ✅ Crear nuevo usuario
+// Crear nuevo usuario
 export const createUsuario = async (req, res) => {
   try {
     const { nombreUsuario, clave, nombre, apellido, dni, email, telefono, tipoUsuario } = req.body
@@ -94,7 +94,7 @@ export const createUsuario = async (req, res) => {
   }
 }
 
-// ✅ Verificar email y crear usuario real
+// Verificar email y crear usuario real
 export const verificarUsuario = async (req, res) => {
   try {
     const { token } = req.query
@@ -152,7 +152,7 @@ export const loginUsuario = async (req, res) => {
 
     const { clave: _, ...safeUser } = user
 
-    // ✅ Generar token
+    // Generar token
     const token = jwt.sign(
       { id: user.usuarioID, email: user.email, rol: user.tipoUsuario },
       JWT_SECRET,
@@ -166,7 +166,7 @@ export const loginUsuario = async (req, res) => {
   }
 }
 
-// ✅ Actualizar usuario
+// Actualizar usuario
 export const updateUsuario = async (req, res) => {
   const { id } = req.params
   const updates = req.body
@@ -186,7 +186,7 @@ export const updateUsuario = async (req, res) => {
   res.json(data)
 }
 
-// ✅ Eliminar usuario
+// Eliminar usuario
 export const deleteUsuario = async (req, res) => {
   const { id } = req.params
   

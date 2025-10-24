@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
+  Alert,
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,8 @@ import {
 } from "react-native";
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 
@@ -43,29 +47,7 @@ const quickActions = [
     route: "/changas/nueva?categoria=envios",
   },
 ];
-const activeJobs = [
-  {
-    id: "plomero-bano",
-    title: "Plomero - Baño",
-    description: "Reparar canilla que gotea",
-    price: "$8.000",
-    due: "Para hoy",
-    estado: "Esperando trabajador",
-    postulantes: 3,
-    icon: "build-outline" as const,
-  },
-  {
-    id: "limpieza-general",
-    title: "Limpieza General",
-    description: "Casa de 3 ambientes",
-    price: "$12.000",
-    due: "Mañana",
-    estado: "En progreso",
-    trabajador: "Ana López",
-    rating: 4.9,
-    icon: "home-outline" as const,
-  },
-];
+
 const summaryData = {
   completadas: 8,
   calificacion: 4.8,
@@ -107,15 +89,47 @@ const quickLinks: {
 // COMPONENTE PRINCIPAL
 // =========================================================
 export default function InicioContratanteScreen() {
-  const router = useRouter();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+  const router = useRouter();
+  
   const pathname = usePathname();
 
-  const initials = useMemo(() => "María".charAt(0), []);
+  const initials = useMemo(() => "Valentin".charAt(0), []);
 
   const { goToProfile } = useProfileNavigation();
 
+  const [changas, setChangas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const fetchChangasByContratante = async () => {
+      try {
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token) {
+          Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+          router.replace("/auth/login");
+          return;
+        }
+
+        const response = await axios.get(
+          `${API_URL}/api/changas/contratante`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        setChangas(response.data); // el backend devuelve un array de changas
+      } catch (error: any) {
+        console.error("Error al obtener changas del contratante:", error.response?.data || error.message);
+        Alert.alert("Error", "No se pudieron cargar tus changas activas.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChangasByContratante();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -176,85 +190,78 @@ export default function InicioContratanteScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.cardList}>
-            {activeJobs.map((job) => {
-              const isInProgress = job.estado === "En progreso";
-              return (
-                <TouchableOpacity
-                  key={job.id}
-                  style={styles.card}
-                onPress={() => 
-                  router.push({ 
-                  pathname: "/changas/[id]", // <-- Usá el patrón [id]
-                  params: { id: job.id, viewMode: 'contratante' } // <-- Pasá 'id' y 'viewMode' acá
-                  })
-                }
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardIconWrapper}>
-                      <Ionicons
-                        name={job.icon}
-                        size={22}
-                        color={palette.tint}
-                      />
+            {loading ? (
+              <ActivityIndicator size="large" color={palette.tint} />
+            ) : changas.length === 0 ? (
+              <Text style={styles.emptyText}>No tenés changas activas.</Text>
+            ) : (
+              changas.map((changa) => {
+                const isInProgress = changa.estado === "En progreso";
+                return (
+                  <TouchableOpacity
+                    key={changa.id || changa.changaID || Math.random().toString()}
+                    style={styles.card}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/changas/[id]",
+                        params: { id: changa.id, viewMode: "contratante" },
+                      })
+                    }
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardIconWrapper}>
+                        <Ionicons name="briefcase-outline" size={22} color={palette.tint} />
+                      </View>
+                      <View style={styles.cardHeaderText}>
+                        <Text style={styles.cardTitle}>{changa.titulo}</Text>
+                        <Text style={styles.cardDescription}>
+                          {changa.descripcion}
+                        </Text>
+                      </View>
+                      {changa.postulantes ? (
+                        <View style={styles.badgeOpen}>
+                          <Text style={styles.badgeTextOpen}>
+                            {changa.postulantes} postulantes
+                          </Text>
+                        </View>
+                      ) : null}
+                      {isInProgress ? (
+                        <View style={styles.badgeProgress}>
+                          <Text style={styles.badgeTextProgress}>
+                            {changa.estado}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={styles.cardHeaderText}>
-                      <Text style={styles.cardTitle}>{job.title}</Text>
-                      <Text style={styles.cardDescription}>
-                        {job.description}
+
+                    <View style={styles.separator} />
+
+                    <View style={styles.cardFooter}>
+                      <View style={styles.metaRow}>
+                        <Ionicons name="cash-outline" size={16} color={palette.muted} />
+                        <Text style={styles.metaText}>${changa.remuneracion}</Text>
+
+                        <Ionicons
+                          name="time-outline"
+                          size={16}
+                          color={palette.muted}
+                          style={{ marginLeft: SPACING.sm }}
+                        />
+                        <Text style={styles.metaText}>
+                          {new Date(changa.horaInicio).toLocaleDateString()}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.metaText}>
+                        {changa.estado || "Sin estado"}
                       </Text>
                     </View>
-                    {job.postulantes ? (
-                      <View style={styles.badgeOpen}>
-                        <Text style={styles.badgeTextOpen}>
-                          {job.postulantes} postulantes
-                        </Text>
-                      </View>
-                    ) : null}
-                    {isInProgress ? (
-                      <View style={styles.badgeProgress}>
-                        <Text style={styles.badgeTextProgress}>
-                          {job.estado}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.separator} />
-                  <View style={styles.cardFooter}>
-                    <View style={styles.metaRow}>
-                      <Ionicons
-                        name="cash-outline"
-                        size={16}
-                        color={palette.muted}
-                      />
-                      <Text style={styles.metaText}>{job.price}</Text>
-                      <Ionicons
-                        name="time-outline"
-                        size={16}
-                        color={palette.muted}
-                        style={{ marginLeft: SPACING.sm }}
-                      />
-                      <Text style={styles.metaText}>{job.due}</Text>
-                    </View>
-                    {!isInProgress && (
-                      <Text style={styles.metaText}>{job.estado}</Text>
-                    )}
-                    {isInProgress && (
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaText}>{job.trabajador}</Text>
-                        <Ionicons
-                          name="star"
-                          size={14}
-                          color="#FFC107"
-                          style={{ marginLeft: 4 }}
-                        />
-                        <Text style={styles.metaTextBold}>{job.rating}</Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
+
           {/* REFACTOR: Resumen mensual */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
@@ -593,5 +600,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: palette.tint,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: palette.muted,
+    fontSize: FONT.md,
+    marginVertical: SPACING.lg,
   },
 });

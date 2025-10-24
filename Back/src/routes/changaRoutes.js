@@ -13,7 +13,7 @@ import { verificarToken } from '../middleware/authMiddleware.js'
 const router = express.Router()
 
 
-// 🔒 protegidas
+// protegidas
 router.get('/iniciadas', verificarToken, getChangasIniciadas)
 router.post('/', verificarToken, createChanga)
 router.get('/trabajador', verificarToken, getChangasByTrabajador)
