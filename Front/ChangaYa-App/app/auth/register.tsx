@@ -30,6 +30,7 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [dni, setDni] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const handleRegister = async () => {
     if (!acceptTerms) {
@@ -192,14 +193,33 @@ export default function RegisterScreen() {
           placeholderTextColor={palette.muted}
         />
 
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Contraseña"
-          secureTextEntry
-          style={styles.input}
-          placeholderTextColor={palette.muted}
-        />  
+{/* AHORA ES UN CONTENEDOR PARA INPUT + ÍCONO */}
+        <View style={styles.passwordInputContainer}>
+          <TextInput
+            placeholder="Contraseña"
+            secureTextEntry={!isPasswordVisible} 
+            value={password}
+            onChangeText={setPassword}
+            style={styles.passwordInput} 
+            placeholderTextColor={palette.muted}
+            autoCapitalize="none"
+        />
+
+            {/* AÑADIDO: Botón del ojo condicional */}
+            {/* Solo se muestra si escribiste algo en la contraseña */}
+            {password.length > 0 && (
+                <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setIsPasswordVisible(!isPasswordVisible)} 
+                >
+                    <Ionicons 
+                        name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
+                        size={24} 
+                        color={palette.muted}
+                    />
+                </TouchableOpacity>
+            )}
+      </View>  
       </View>
 
       {/* Checkboxes */}
@@ -359,6 +379,31 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 20,
     alignItems: "center",
+  },
+  
+  // 1. Contenedor que imita a 'input' pero permite un ícono adentro
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%', // Asegura que ocupe el ancho completo
+    borderWidth: 1,
+    borderColor: "#bbb", // Mismos estilos que 'input'
+    borderRadius: RADIUS.md,
+    backgroundColor: palette.white,
+  },
+
+  // 2. El TextInput de la contraseña (sin bordes, flexible)
+  passwordInput: {
+    flex: 1, // Ocupa todo el espacio menos el ícono
+    paddingVertical: 12, // Mismos paddings que 'input'
+    paddingHorizontal: 14,
+    fontSize: FONT.md,
+    color: palette.text,
+  },
+
+  // 3. El botón del ojo
+  eyeButton: {
+    padding: 14, // Un área de toque cómoda (similar al padding del input)
   },
   footerTxt: {
     color: palette.muted,
