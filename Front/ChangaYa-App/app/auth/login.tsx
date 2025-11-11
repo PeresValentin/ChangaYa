@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -85,7 +88,16 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+        <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+        <ScrollView 
+            style={styles.scrollContainer}
+            // 3. Usamos tu 'container' original como contentContainerStyle
+            contentContainerStyle={styles.container} 
+            keyboardShouldPersistTaps="handled"
+        >
       {/* Avatar inicial */}
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>C</Text>
@@ -169,7 +181,8 @@ export default function LoginScreen() {
           Regístrate
         </Link>
       </View>
-    </View>
+    </ScrollView> 
+    </KeyboardAvoidingView>
   );
 }
 
@@ -180,15 +193,20 @@ const { RADIUS, SPACING, FONT } = theme;
 const palette = theme.Colors.light;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.white,
-    padding: SPACING.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    keyboardAvoidingContainer: {
+        flex: 1,
+    },
+    scrollContainer: {
+        flex: 1,
+        backgroundColor: palette.white,
+    },
+    container: {
+        flexGrow: 1,
+        padding: SPACING.lg,
+        alignItems: "center",
+        justifyContent: "center", 
+    },
 
-  // 1. Contenedor que imita a 'input' pero permite un ícono adentro
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
