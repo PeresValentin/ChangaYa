@@ -1,7 +1,7 @@
 // Front/ChangaYa-App/app/perfil/index.tsx
 
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import {
   SafeAreaView,
   ScrollView,
@@ -68,6 +68,7 @@ const ACCOUNT_OPTIONS = [
 ] as const;
 
 const PerfilPrivadoScreen = () => {
+  const router = useRouter();
   const initials = USER_PROFILE.name
     .split(" ")
     .filter(Boolean)
@@ -139,11 +140,19 @@ const PerfilPrivadoScreen = () => {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
+<View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Opciones</Text>
-          <View style={styles.optionsList}>
-            {ACCOUNT_OPTIONS.map((option) => (
-              <TouchableOpacity key={option.id} style={styles.optionItem}>
+            <View style={styles.optionsList}>
+              {ACCOUNT_OPTIONS.map((option) => (
+              <TouchableOpacity 
+                key={option.id} 
+                style={styles.optionItem}
+                onPress={() => {
+                  if (option.id === 'notifications') {
+                    router.push('/notifications/notifications');
+                  }
+                }}
+              >
                 <View style={styles.optionIconWrapper}>
                   <Ionicons name={option.icon} size={20} color={palette.tint} />
                 </View>
