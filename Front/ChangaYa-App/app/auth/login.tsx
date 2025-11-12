@@ -15,9 +15,10 @@ import {
 import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-
+import { useLoading } from '../../hooks/LoadingContext';
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
+
 
 export default function LoginScreen() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -33,6 +35,7 @@ export default function LoginScreen() {
       return;
     }
 
+    showLoading();
     try {
       const response = await axios.post(
         `${API_URL}/api/usuarios/login`,
@@ -84,9 +87,12 @@ export default function LoginScreen() {
       } else {
         Alert.alert("Error de conexión", "No se pudo contactar con el servidor.");
       }
+    } finally {
+      hideLoading();
     }
   };
 
+    
   return (
         <KeyboardAvoidingView 
         style={styles.keyboardAvoidingContainer}
@@ -136,11 +142,11 @@ export default function LoginScreen() {
                     style={styles.eyeButton}
                     onPress={() => setIsPasswordVisible(!isPasswordVisible)} 
                 >
-                    <Ionicons 
-                        name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
-                        size={24} 
-                        color={palette.muted}
-                    />
+          <Ionicons 
+            name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
+            size={24} 
+            color={palette.muted}
+          />
                 </TouchableOpacity>
             )}
           </View>

@@ -1,7 +1,7 @@
 // Front/ChangaYa-App/app/perfil/index.tsx
 
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router"
 import {
   SafeAreaView,
   ScrollView,
@@ -9,13 +9,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
 import ReviewItem from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
-import { useProfileNavigation } from "@/hooks/use-profile-navigation"; // añadido
+import { useProfileNavigation } from "@/hooks/use-profile-navigation";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -68,6 +70,7 @@ const ACCOUNT_OPTIONS = [
 ] as const;
 
 const PerfilPrivadoScreen = () => {
+  const router = useRouter();
   const initials = USER_PROFILE.name
     .split(" ")
     .filter(Boolean)
@@ -81,6 +84,38 @@ const PerfilPrivadoScreen = () => {
   );
 
   const { currentUserId } = useProfileNavigation(); // coherencia futura con navegación centralizada
+  const handleLogout = () => {
+    // 1. Preguntar al usuario si está seguro
+    Alert.alert(
+      "Cerrar Sesión",
+      "¿Estás seguro de que querés cerrar sesión?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Cerrar Sesión",
+          style: "destructive",
+          // 2. Si confirma, ejecutar la lógica asíncrona
+          onPress: async () => {
+            try {
+              // 3. Borrar los datos de sesión guardados
+              await AsyncStorage.removeItem("jwtToken");
+              await AsyncStorage.removeItem("userData");
+              router.back(); 
+              setTimeout(() => {
+                router.replace("/auth/welcome");
+              }, 100);
+            } catch (e) {
+              console.error("Error al cerrar sesión:", e);
+              Alert.alert("Error", "No se pudo cerrar la sesión.");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -143,7 +178,21 @@ const PerfilPrivadoScreen = () => {
           <Text style={styles.sectionTitle}>Opciones</Text>
           <View style={styles.optionsList}>
             {ACCOUNT_OPTIONS.map((option) => (
-              <TouchableOpacity key={option.id} style={styles.optionItem}>
+              <TouchableOpacity 
+                key={option.id} 
+                style={styles.optionItem}
+                onPress={() => {
+                  if (option.id === 'notifications') {
+                    router.push('/profile/notifications');
+                  }
+                  if (option.id === 'favorites') {
+                    router.push('/profile/favorites');
+                  }
+                  if (option.id === 'logout') {
+                    handleLogout(); // Asumiendo que 'handleLogout' está definida
+                  }
+                }}
+              >
                 <View style={styles.optionIconWrapper}>
                   <Ionicons name={option.icon} size={20} color={palette.tint} />
                 </View>
