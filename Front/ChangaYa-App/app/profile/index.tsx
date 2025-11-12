@@ -1,7 +1,7 @@
 // Front/ChangaYa-App/app/perfil/index.tsx
 
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router"
+import { Stack, useRouter } from "expo-router";
 import {
   SafeAreaView,
   ScrollView,
@@ -174,22 +174,16 @@ const PerfilPrivadoScreen = () => {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
+<View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Opciones</Text>
-          <View style={styles.optionsList}>
-            {ACCOUNT_OPTIONS.map((option) => (
+            <View style={styles.optionsList}>
+              {ACCOUNT_OPTIONS.map((option) => (
               <TouchableOpacity 
                 key={option.id} 
                 style={styles.optionItem}
                 onPress={() => {
                   if (option.id === 'notifications') {
-                    router.push('/profile/notifications');
-                  }
-                  if (option.id === 'favorites') {
-                    router.push('/profile/favorites');
-                  }
-                  if (option.id === 'logout') {
-                    handleLogout(); // Asumiendo que 'handleLogout' está definida
+                    router.push('/notifications/notifications');
                   }
                 }}
               >
