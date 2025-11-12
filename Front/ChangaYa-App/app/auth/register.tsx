@@ -30,10 +30,16 @@ export default function RegisterScreen() {
   const [dni, setDni] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState(""); 
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const handleRegister = async () => {
     if (!acceptTerms) {
       Alert.alert("Debes aceptar los términos y condiciones");
       return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert("Error", "Las contraseñas no coinciden. Por favor, verifícalas.");
+      return; // Detiene la ejecución si no coinciden
     }
     try {
       const response = await axios.post(`${API_URL}/api/usuarios`, {
@@ -159,7 +165,7 @@ return (
                     style={styles.input}
                     placeholderTextColor={palette.muted}
                 />
-                {/* Contenedor de Contraseña (sin cambios) */}
+                
                 <View style={styles.passwordInputContainer}>
                     <TextInput
                         placeholder="Contraseña"
@@ -170,6 +176,7 @@ return (
                         placeholderTextColor={palette.muted}
                         autoCapitalize="none"
                     />
+
                     {password.length > 0 && (
                         <TouchableOpacity
                             style={styles.eyeButton}
@@ -178,12 +185,35 @@ return (
                             <Ionicons 
                                 name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
                                 size={24} 
-                L               color={palette.muted}
+                                color={palette.muted}
                             />
                         </TouchableOpacity>
                     )}
-                </View>  
-            </View>
+                </View> 
+                <View style={styles.passwordInputContainer}>
+                    <TextInput
+                        placeholder="Repetir Contraseña"
+                        secureTextEntry={!isConfirmPasswordVisible} 
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        style={styles.passwordInput} 
+                        placeholderTextColor={palette.muted}
+                        autoCapitalize="none"
+                    />
+                    {confirmPassword.length > 0 && (
+                        <TouchableOpacity
+                            style={styles.eyeButton}
+                            onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)} 
+                        >
+                            <Ionicons 
+                                name={isConfirmPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
+                                size={24} 
+                                color={palette.muted}
+                           />
+                        </TouchableOpacity>
+                    )}
+                </View> 
+            </View>  
             {/* Checkboxes */}
             <View style={styles.checkboxRow}>
                 <Switch
@@ -304,7 +334,6 @@ const styles = StyleSheet.create({
     color: palette.white,
   },
   form: {
-    height: 280,
     gap: 12,
     marginBottom: SPACING.sm,
   },
