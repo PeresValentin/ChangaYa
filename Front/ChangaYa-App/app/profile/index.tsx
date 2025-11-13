@@ -74,7 +74,7 @@ const PerfilPrivadoScreen = () => {
     Math.min(1, Math.max(0, USER_PROFILE.generalScore)) * 100
   );
 
-  const { currentUserId } = useProfileNavigation(); // coherencia futura con navegación centralizada
+  const { currentUserId } = useProfileNavigation();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -97,7 +97,7 @@ const PerfilPrivadoScreen = () => {
           completedJobs={USER_PROFILE.completedJobs}
           avatarInitials={initials}
           showSettings
-          onSettingsPress={() => router.push("/profile/settings")}   // <-- esta línea es la solución
+          onSettingsPress={() => router.push("/profile/settings")}   
         />
 
         <View style={styles.sectionCard}>
