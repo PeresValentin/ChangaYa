@@ -23,23 +23,6 @@ const monthlySnapshot = {
   satisfaction: 4.9,
 };
 
-const highlights = [
-  {
-    id: "most-hired",
-    title: "Trabajador más contratado",
-    description: "Laura P. fue contratada 3 veces este mes",
-    icon: "star" as const,
-    route: "/trabajadores/frecuentes",
-  },
-  {
-    id: "peak-day",
-    title: "Día con más actividad",
-    description: "Los jueves concentran el 40% de tus changas",
-    icon: "calendar" as const,
-    route: "/estadisticas/actividad",
-  },
-];
-
 const weeklyChangasData = [
   { label: "Sem 1", value: 3 },
   { label: "Sem 2", value: 4 },
@@ -47,16 +30,7 @@ const weeklyChangasData = [
   { label: "Sem 4", value: 3 },
 ];
 
-type Metric = {
-  id: string;
-  title: string;
-  value: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  route: string;
-};
-
-const metrics: Metric[] = [
+const metrics = [
   {
     id: "completed",
     title: "Changas completadas",
@@ -71,7 +45,7 @@ const metrics: Metric[] = [
     value: String(monthlySnapshot.ongoing),
     description: "Pendientes de aprobación",
     icon: "time-outline",
-    route: "/changas/en-curso",
+    route: "/changas/mis",
   },
   {
     id: "paid",
@@ -79,7 +53,7 @@ const metrics: Metric[] = [
     value: monthlySnapshot.totalPaid,
     description: "Pagos realizados este mes",
     icon: "card-outline",
-    route: "/finanzas",
+    route: "/changas/mis",
   },
   {
     id: "satisfaction",
@@ -87,22 +61,11 @@ const metrics: Metric[] = [
     value: `${monthlySnapshot.satisfaction}/5`,
     description: "Basado en reseñas",
     icon: "happy-outline",
-    route: "/reseñas",
+    route: "/changas/mis",
   },
 ];
 
-const interpolateColor = (value: number, max: number) => {
-  const pct = value / max;
-  const lerp = (a: number, b: number) => a + (b - a) * pct;
-
-  const r = Math.round(lerp(229, 35));
-  const g = Math.round(lerp(245, 132));
-  const b = Math.round(lerp(224, 67));
-
-  return `rgb(${r},${g},${b})`;
-};
-
-const SummaryMetricCard = memo((props: Metric) => {
+const SummaryMetricCard = memo((props: any) => {
   const router = useRouter();
   return (
     <TouchableOpacity
@@ -122,34 +85,6 @@ const SummaryMetricCard = memo((props: Metric) => {
   );
 });
 SummaryMetricCard.displayName = "SummaryMetricCard";
-
-type Highlight = {
-  id: string;
-  title: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  route: string;
-};
-
-const HighlightCard = memo((props: Highlight) => {
-  const router = useRouter();
-  return (
-    <TouchableOpacity
-      style={styles.highlightCard}
-      activeOpacity={0.85}
-      onPress={() => router.push(props.route as any)}
-    >
-      <View style={styles.highlightIconWrapper}>
-        <Ionicons name={props.icon} size={20} color={palette.icon} />
-      </View>
-      <View style={styles.highlightTextWrapper}>
-        <Text style={styles.highlightTitle}>{props.title}</Text>
-        <Text style={styles.highlightDescription}>{props.description}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-});
-HighlightCard.displayName = "HighlightCard";
 
 const WeeklyChangasBars = memo(() => {
   const animatedValues = weeklyChangasData.map(() => new Animated.Value(0));
@@ -176,27 +111,24 @@ const WeeklyChangasBars = memo(() => {
       </View>
 
       <View style={styles.chartContent}>
-        {weeklyChangasData.map((item, i) => {
-          const barColor = interpolateColor(item.value, maxValue);
-          return (
-            <View key={item.label} style={styles.chartColumn}>
-              <Animated.View
-                style={[
-                  styles.chartBar,
-                  {
-                    height: animatedValues[i],
-                    backgroundColor: barColor,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  },
-                ]}
-              >
-                <Text style={styles.chartValueInside}>{item.value}</Text>
-              </Animated.View>
-              <Text style={styles.chartLabel}>{item.label}</Text>
-            </View>
-          );
-        })}
+        {weeklyChangasData.map((item, i) => (
+          <View key={item.label} style={styles.chartColumn}>
+            <Animated.View
+              style={[
+                styles.chartBar,
+                {
+                  height: animatedValues[i],
+                  backgroundColor: palette.tint,
+                  justifyContent: "center",
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <Text style={styles.chartValueInside}>{item.value}</Text>
+            </Animated.View>
+            <Text style={styles.chartLabel}>{item.label}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -231,6 +163,8 @@ export default function SummaryScreen() {
     (monthlySnapshot.completed + monthlySnapshot.ongoing) /
     monthlySnapshot.goal;
 
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -240,7 +174,9 @@ export default function SummaryScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Resumen del Mes</Text>
-          <Text style={styles.subtitle}>Seguimiento de tus contrataciones.</Text>
+          <Text style={styles.subtitle}>
+            Seguimiento de tus contrataciones y desempeño.
+          </Text>
           <AnimatedProgressBar progress={progress} />
           <Text style={styles.progressLabel}>
             {(progress * 100).toFixed(0)}% del objetivo mensual
@@ -255,14 +191,11 @@ export default function SummaryScreen() {
 
         <WeeklyChangasBars />
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Destacados</Text>
-          {highlights.map((h) => (
-            <HighlightCard key={h.id} {...h} />
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.ctaButton} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.ctaButton}
+          activeOpacity={0.85}
+          onPress={() => router.push("/changas/mis")}
+        >
           <Ionicons name="navigate-outline" size={20} color={palette.white} />
           <Text style={styles.ctaLabel}>Ir a mis changas</Text>
         </TouchableOpacity>
@@ -386,44 +319,6 @@ const styles = StyleSheet.create({
     color: palette.white,
     fontSize: FONT.md,
     fontWeight: "700",
-  },
-  section: {
-    gap: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: FONT.lg,
-    fontWeight: "700",
-    color: palette.text,
-  },
-  highlightCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    backgroundColor: palette.white,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    elevation: 1,
-  },
-  highlightIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(97,150,94,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  highlightTextWrapper: {
-    flex: 1,
-    gap: SPACING.xs,
-  },
-  highlightTitle: {
-    fontSize: FONT.md,
-    fontWeight: "600",
-    color: palette.text,
-  },
-  highlightDescription: {
-    fontSize: FONT.sm,
-    color: palette.muted,
   },
   ctaButton: {
     flexDirection: "row",
