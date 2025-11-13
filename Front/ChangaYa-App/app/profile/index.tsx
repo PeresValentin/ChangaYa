@@ -100,13 +100,12 @@ const PerfilPrivadoScreen = () => {
           // 2. Si confirma, ejecutar la lógica asíncrona
           onPress: async () => {
             try {
-              // 3. Borrar los datos de sesión guardados
               await AsyncStorage.removeItem("jwtToken");
               await AsyncStorage.removeItem("userData");
               router.back(); 
-              setTimeout(() => {
+              setTimeout(() => {
                 router.replace("/auth/welcome");
-              }, 100);
+              }, 100); // 100ms es usualmente suficiente
             } catch (e) {
               console.error("Error al cerrar sesión:", e);
               Alert.alert("Error", "No se pudo cerrar la sesión.");
@@ -174,16 +173,22 @@ const PerfilPrivadoScreen = () => {
           </View>
         </View>
 
-<View style={styles.sectionCard}>
+        <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Opciones</Text>
-            <View style={styles.optionsList}>
-              {ACCOUNT_OPTIONS.map((option) => (
+          <View style={styles.optionsList}>
+            {ACCOUNT_OPTIONS.map((option) => (
               <TouchableOpacity 
                 key={option.id} 
                 style={styles.optionItem}
                 onPress={() => {
                   if (option.id === 'notifications') {
                     router.push('/notifications/notifications');
+                  }
+                  if (option.id === 'favorites') {
+                    router.push('/profile/favorites');
+                  }
+                  if (option.id === 'logout') {
+                    handleLogout(); // Asumiendo que 'handleLogout' está definida
                   }
                 }}
               >
