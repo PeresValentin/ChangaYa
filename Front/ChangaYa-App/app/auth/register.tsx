@@ -71,7 +71,7 @@ return (
     // 1. KeyboardAvoidingView AHORA ES EL CONTENEDOR RAÍZ
     <KeyboardAvoidingView 
         style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
         {/* 2. ScrollView AHORA ENVUELVE TODO EL CONTENIDO */}
         <ScrollView 
