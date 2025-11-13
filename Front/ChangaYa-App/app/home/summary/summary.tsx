@@ -40,14 +40,12 @@ const highlights = [
   },
 ];
 
-const weeklyHoursData = [
-  { label: "Sem 1", value: 10 },
-  { label: "Sem 2", value: 14 },
-  { label: "Sem 3", value: 8 },
-  { label: "Sem 4", value: 12 },
+const weeklyChangasData = [
+  { label: "Sem 1", value: 3 },
+  { label: "Sem 2", value: 4 },
+  { label: "Sem 3", value: 2 },
+  { label: "Sem 4", value: 3 },
 ];
-
-type HighlightCardProps = (typeof highlights)[number];
 
 type Metric = {
   id: string;
@@ -87,66 +85,82 @@ const metrics: Metric[] = [
     id: "satisfaction",
     title: "Satisfacción",
     value: `${monthlySnapshot.satisfaction}/5`,
-    description: "Basado en reseñas de trabajadores",
+    description: "Basado en reseñas",
     icon: "happy-outline",
     route: "/reseñas",
   },
 ];
 
-const SummaryMetricCard = memo(
-  ({ title, value, description, icon, route }: Metric) => {
-    const router = useRouter();
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        style={styles.metricCard}
-        onPress={() => router.push(route as any)}
-      >
-        <View style={styles.metricHeader}>
-          <View style={styles.metricIcon}>
-            <Ionicons name={icon} size={22} color={palette.tint} />
-          </View>
-          <Text style={styles.metricTitle}>{title}</Text>
+const interpolateColor = (value: number, max: number) => {
+  const pct = value / max;
+  const lerp = (a: number, b: number) => a + (b - a) * pct;
+
+  const r = Math.round(lerp(229, 35));
+  const g = Math.round(lerp(245, 132));
+  const b = Math.round(lerp(224, 67));
+
+  return `rgb(${r},${g},${b})`;
+};
+
+const SummaryMetricCard = memo((props: Metric) => {
+  const router = useRouter();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      style={styles.metricCard}
+      onPress={() => router.push(props.route as any)}
+    >
+      <View style={styles.metricHeader}>
+        <View style={styles.metricIcon}>
+          <Ionicons name={props.icon} size={22} color={palette.tint} />
         </View>
-        <Text style={styles.metricValue}>{value}</Text>
-        <Text style={styles.metricDescription}>{description}</Text>
-      </TouchableOpacity>
-    );
-  }
-);
+        <Text style={styles.metricTitle}>{props.title}</Text>
+      </View>
+      <Text style={styles.metricValue}>{props.value}</Text>
+      <Text style={styles.metricDescription}>{props.description}</Text>
+    </TouchableOpacity>
+  );
+});
 SummaryMetricCard.displayName = "SummaryMetricCard";
 
-const HighlightCard = memo(({ title, description, icon, route }: HighlightCardProps) => {
+type Highlight = {
+  id: string;
+  title: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  route: string;
+};
+
+const HighlightCard = memo((props: Highlight) => {
   const router = useRouter();
   return (
     <TouchableOpacity
       style={styles.highlightCard}
       activeOpacity={0.85}
-      onPress={() => router.push(route as any)}
+      onPress={() => router.push(props.route as any)}
     >
       <View style={styles.highlightIconWrapper}>
-        <Ionicons name={icon} size={20} color={palette.icon} />
+        <Ionicons name={props.icon} size={20} color={palette.icon} />
       </View>
       <View style={styles.highlightTextWrapper}>
-        <Text style={styles.highlightTitle}>{title}</Text>
-        <Text style={styles.highlightDescription}>{description}</Text>
+        <Text style={styles.highlightTitle}>{props.title}</Text>
+        <Text style={styles.highlightDescription}>{props.description}</Text>
       </View>
     </TouchableOpacity>
   );
 });
 HighlightCard.displayName = "HighlightCard";
 
-// Animación de gráfico de barras: horas contratadas
-const WeeklyHoursBars = memo(() => {
-  const animatedValues = weeklyHoursData.map(() => new Animated.Value(0));
-  const maxValue = useMemo(() => Math.max(...weeklyHoursData.map((i) => i.value)), []);
+const WeeklyChangasBars = memo(() => {
+  const animatedValues = weeklyChangasData.map(() => new Animated.Value(0));
+  const maxValue = Math.max(...weeklyChangasData.map((i) => i.value));
 
   useEffect(() => {
     Animated.stagger(
       150,
       animatedValues.map((anim, i) =>
         Animated.timing(anim, {
-          toValue: (weeklyHoursData[i].value / maxValue) * 120,
+          toValue: (weeklyChangasData[i].value / maxValue) * 120,
           duration: 700,
           useNativeDriver: false,
         })
@@ -157,25 +171,38 @@ const WeeklyHoursBars = memo(() => {
   return (
     <View style={styles.chartCard}>
       <View style={styles.chartHeader}>
-        <Text style={styles.chartTitle}>Horas contratadas por semana</Text>
+        <Text style={styles.chartTitle}>Changas realizadas por semana</Text>
         <Ionicons name="bar-chart-outline" size={22} color={palette.icon} />
       </View>
+
       <View style={styles.chartContent}>
-        {weeklyHoursData.map((item, i) => (
-          <View key={item.label} style={styles.chartColumn}>
-            <Animated.View
-              style={[styles.chartBar, { height: animatedValues[i] }]}
-            />
-            <Text style={styles.chartLabel}>{item.label}</Text>
-          </View>
-        ))}
+        {weeklyChangasData.map((item, i) => {
+          const barColor = interpolateColor(item.value, maxValue);
+          return (
+            <View key={item.label} style={styles.chartColumn}>
+              <Animated.View
+                style={[
+                  styles.chartBar,
+                  {
+                    height: animatedValues[i],
+                    backgroundColor: barColor,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                <Text style={styles.chartValueInside}>{item.value}</Text>
+              </Animated.View>
+              <Text style={styles.chartLabel}>{item.label}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
 });
-WeeklyHoursBars.displayName = "WeeklyHoursBars";
+WeeklyChangasBars.displayName = "WeeklyChangasBars";
 
-// Barra de progreso animada
 const AnimatedProgressBar = ({ progress }: { progress: number }) => {
   const animatedWidth = useRef(new Animated.Value(0)).current;
 
@@ -200,7 +227,6 @@ const AnimatedProgressBar = ({ progress }: { progress: number }) => {
 };
 
 export default function SummaryScreen() {
-  const router = useRouter();
   const progress =
     (monthlySnapshot.completed + monthlySnapshot.ongoing) /
     monthlySnapshot.goal;
@@ -212,42 +238,31 @@ export default function SummaryScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Encabezado */}
         <View style={styles.header}>
           <Text style={styles.title}>Resumen del Mes</Text>
-          <Text style={styles.subtitle}>
-            Seguimiento de tus contrataciones y desempeño.
-          </Text>
+          <Text style={styles.subtitle}>Seguimiento de tus contrataciones.</Text>
           <AnimatedProgressBar progress={progress} />
           <Text style={styles.progressLabel}>
             {(progress * 100).toFixed(0)}% del objetivo mensual
           </Text>
         </View>
 
-        {/* Métricas destacadas */}
         <View style={styles.metricsGrid}>
-          {metrics.map((metric) => (
-            <SummaryMetricCard key={metric.id} {...metric} />
+          {metrics.map((m) => (
+            <SummaryMetricCard key={m.id} {...m} />
           ))}
         </View>
 
-        {/* Gráfica: horas contratadas */}
-        <WeeklyHoursBars />
+        <WeeklyChangasBars />
 
-        {/* Destacados */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Destacados</Text>
-          {highlights.map((item) => (
-            <HighlightCard key={item.id} {...item} />
+          {highlights.map((h) => (
+            <HighlightCard key={h.id} {...h} />
           ))}
         </View>
 
-        {/* CTA */}
-        <TouchableOpacity
-          style={styles.ctaButton}
-          activeOpacity={0.85}
-          onPress={() => router.push("/changas/mis")}
-        >
+        <TouchableOpacity style={styles.ctaButton} activeOpacity={0.85}>
           <Ionicons name="navigate-outline" size={20} color={palette.white} />
           <Text style={styles.ctaLabel}>Ir a mis changas</Text>
         </TouchableOpacity>
@@ -261,16 +276,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.background,
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   content: {
     padding: SPACING.lg,
     gap: SPACING.lg,
   },
-  header: {
-    gap: SPACING.xs,
-  },
+  header: { gap: SPACING.xs },
   title: {
     fontSize: FONT.xxl,
     fontWeight: "700",
@@ -279,14 +290,12 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: FONT.md,
     color: palette.muted,
-    lineHeight: 20,
   },
   progressContainer: {
     height: 8,
     borderRadius: 6,
     backgroundColor: "rgba(0,0,0,0.1)",
     overflow: "hidden",
-    marginTop: SPACING.xs,
   },
   progressFill: {
     height: "100%",
@@ -295,7 +304,6 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: FONT.sm,
     color: palette.muted,
-    marginTop: 4,
   },
   metricsGrid: {
     flexDirection: "row",
@@ -309,10 +317,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
     gap: SPACING.sm,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
   metricHeader: {
@@ -330,13 +334,13 @@ const styles = StyleSheet.create({
   },
   metricTitle: {
     fontSize: FONT.md,
-    color: palette.text,
     fontWeight: "600",
+    color: palette.text,
   },
   metricValue: {
     fontSize: FONT.xl,
-    color: palette.tint,
     fontWeight: "700",
+    color: palette.tint,
   },
   metricDescription: {
     fontSize: FONT.sm,
@@ -347,10 +351,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING.lg,
     gap: SPACING.md,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   chartHeader: {
@@ -360,8 +360,8 @@ const styles = StyleSheet.create({
   },
   chartTitle: {
     fontSize: FONT.lg,
-    color: palette.text,
     fontWeight: "600",
+    color: palette.text,
   },
   chartContent: {
     flexDirection: "row",
@@ -371,22 +371,24 @@ const styles = StyleSheet.create({
   },
   chartColumn: {
     alignItems: "center",
-    justifyContent: "flex-end",
     flex: 1,
     gap: SPACING.xs,
   },
   chartBar: {
     width: "80%",
     borderRadius: RADIUS.sm,
-    backgroundColor: palette.tint,
   },
   chartLabel: {
     fontSize: FONT.sm,
     color: palette.muted,
   },
+  chartValueInside: {
+    color: palette.white,
+    fontSize: FONT.md,
+    fontWeight: "700",
+  },
   section: {
     gap: SPACING.md,
-    marginTop: SPACING.sm,
   },
   sectionTitle: {
     fontSize: FONT.lg,
@@ -400,10 +402,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.white,
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
   highlightIconWrapper: {
@@ -426,7 +424,6 @@ const styles = StyleSheet.create({
   highlightDescription: {
     fontSize: FONT.sm,
     color: palette.muted,
-    lineHeight: 18,
   },
   ctaButton: {
     flexDirection: "row",
@@ -436,7 +433,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tint,
     paddingVertical: SPACING.md,
     borderRadius: RADIUS.lg,
-    marginTop: SPACING.md,
   },
   ctaLabel: {
     color: palette.white,
