@@ -31,6 +31,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="profile/index" options={{ headerShown: false }} />
         <Stack.Screen name="notifications/notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
         <Stack.Screen name="home/summary/summary" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
