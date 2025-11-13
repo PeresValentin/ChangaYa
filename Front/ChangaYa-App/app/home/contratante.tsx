@@ -262,29 +262,34 @@ export default function InicioContratanteScreen() {
             )}
           </View>
 
-          {/* REFACTOR: Resumen mensual */}
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.sectionTitle}>Resumen del mes</Text>
-              <Ionicons name="stats-chart" size={20} color={palette.tint} />
-            </View>
-            <View style={styles.summaryRow}>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={16}
-                color={palette.icon}
-              />
-              <Text style={styles.metaText}>
-                {summaryData.completadas} changas completadas
-              </Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Ionicons name="star-outline" size={16} color={palette.icon} />
-              <Text style={styles.metaText}>
-                Calificación promedio: {summaryData.calificacion}
-              </Text>
-            </View>
-          </View>
+          <TouchableOpacity
+  activeOpacity={0.8}
+  onPress={() => router.push("home/summary/summary" as any)}
+  style={styles.summaryCard}
+>
+  <View style={styles.summaryRow}>
+    <Text style={styles.sectionTitle}>Resumen del mes</Text>
+    <Ionicons name="stats-chart" size={20} color={palette.tint} />
+  </View>
+
+  <View style={styles.summaryRow}>
+    <Ionicons
+      name="checkmark-circle-outline"
+      size={16}
+      color={palette.icon}
+    />
+    <Text style={styles.metaText}>
+      {summaryData.completadas} changas completadas
+    </Text>
+  </View>
+
+  <View style={styles.summaryRow}>
+    <Ionicons name="star-outline" size={16} color={palette.icon} />
+    <Text style={styles.metaText}>
+      Calificación promedio: {summaryData.calificacion}
+    </Text>
+  </View>
+</TouchableOpacity>
         </ScrollView>
         {/* AÑADIDO: Barra de navegación (copiada de trabajador.tsx) */}
         <View style={styles.bottomNav}>
