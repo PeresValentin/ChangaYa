@@ -97,6 +97,7 @@ const PerfilPrivadoScreen = () => {
           completedJobs={USER_PROFILE.completedJobs}
           avatarInitials={initials}
           showSettings
+          onSettingsPress={() => router.push("/profile/settings")}   // <-- esta línea es la solución
         />
 
         <View style={styles.sectionCard}>

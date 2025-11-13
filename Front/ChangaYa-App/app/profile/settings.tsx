@@ -34,7 +34,6 @@ interface SettingsSection {
 const USER_SUMMARY = {
   name: "Rafael Eguren",
   email: "rafael.eguren@gmail.com",
-  plan: "Changas Pro",
   updatedAt: "Actualizado hace 2 hs",
 };
 
@@ -44,37 +43,51 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
     title: "Mi cuenta",
     options: [
       {
+        id: "edit-profile",
+        label: "Editar perfil",
+        description: "Actualizá tu información personal",
+        icon: "person-outline",
+      },
+      {
         id: "favorites",
-        label: "Favoritas",
-        description: "Administrá profesionales guardados",
+        label: "Favoritas (Changas)",
+        description: "Tus changas guardadas",
         icon: "heart-outline",
       },
       {
         id: "history",
         label: "Historial",
-        description: "Revisá tus changas recientes",
+        description: "Revisá tus últimos trabajos",
         icon: "time-outline",
       },
       {
-        id: "payments",
-        label: "Pagos y cobros",
-        description: "CBU, tarjetas y comprobantes",
-        icon: "card-outline",
-      },
-    ],
-  },
-  {
-    id: "preferences",
-    title: "Preferencias",
-    options: [
-      {
         id: "notifications",
         label: "Notificaciones",
-        description: "Alertas push y correo",
+        description: "Controlá avisos y alertas",
         icon: "notifications-outline",
       },
     ],
   },
+  
+  {
+    id: "support",
+    title: "Soporte y ayuda",
+    options: [
+      {
+        id: "help-center",
+        label: "Centro de ayuda",
+        description: "Preguntas frecuentes y guías",
+        icon: "help-circle-outline",
+      },
+      {
+        id: "contact-support",
+        label: "Contactar soporte",
+        description: "Obtené asistencia personalizada",
+        icon: "chatbubbles-outline",
+      },
+    ],
+  },
+
   {
     id: "security",
     title: "Seguridad",
@@ -101,10 +114,24 @@ const AjustesScreen = () => {
     .toUpperCase();
 
   const handleOptionPress = (optionId: string) => {
-    if (optionId === "notifications") {
+  switch (optionId) {
+    case "notifications":
       router.push("/notifications/notifications");
-    }
-  };
+      break;
+
+    case "edit-profile":
+    case "favorites":
+    case "history":
+    case "help-center":
+    case "contact-support":
+      console.log(`Opción "${optionId}" aún no implementada.`);
+      break;
+
+    case "logout":
+      console.log("Cerrar sesión");
+      break;
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -127,18 +154,7 @@ const AjustesScreen = () => {
           <View style={styles.heroTextWrapper}>
             <Text style={styles.heroName}>{USER_SUMMARY.name}</Text>
             <Text style={styles.heroEmail}>{USER_SUMMARY.email}</Text>
-            <View style={styles.heroMetaRow}>
-              <View style={styles.heroPill}>
-                <Ionicons
-                  name="sparkles-outline"
-                  size={14}
-                  color={palette.tint}
-                  style={styles.heroPillIcon}
-                />
-                <Text style={styles.heroPillText}>{USER_SUMMARY.plan}</Text>
-              </View>
-              <Text style={styles.heroUpdatedAt}>{USER_SUMMARY.updatedAt}</Text>
-            </View>
+            <Text style={styles.heroUpdatedAt}>{USER_SUMMARY.updatedAt}</Text>
           </View>
         </View>
 
@@ -257,28 +273,6 @@ const styles = StyleSheet.create({
   heroEmail: {
     fontSize: FONT.sm,
     color: palette.muted,
-    fontFamily: fontFamilies.rounded,
-  },
-  heroMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  heroPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: `${palette.tint}22`,
-  },
-  heroPillIcon: {
-    marginRight: 2,
-  },
-  heroPillText: {
-    fontSize: FONT.lg,
-    color: palette.tint,
     fontFamily: fontFamilies.rounded,
   },
   heroUpdatedAt: {
