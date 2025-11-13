@@ -141,7 +141,7 @@ const CrearChangaScreen = () => {
             />
             <KeyboardAvoidingView
                 style={styles.keyboardAvoidingContainer} // Usamos un estilo nuevo
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
 
             <ScrollView 
