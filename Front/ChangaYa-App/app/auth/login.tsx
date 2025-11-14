@@ -8,13 +8,17 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-
+import { useLoading } from '../../hooks/LoadingContext';
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
+
 
 export default function LoginScreen() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -23,6 +27,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -30,6 +35,7 @@ export default function LoginScreen() {
       return;
     }
 
+    showLoading();
     try {
       const response = await axios.post(
         `${API_URL}/api/usuarios/login`,
@@ -81,11 +87,23 @@ export default function LoginScreen() {
       } else {
         Alert.alert("Error de conexión", "No se pudo contactar con el servidor.");
       }
+    } finally {
+      hideLoading();
     }
   };
 
+    
   return (
-    <View style={styles.container}>
+        <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+        <ScrollView 
+            style={styles.scrollContainer}
+            // 3. Usamos tu 'container' original como contentContainerStyle
+            contentContainerStyle={styles.container} 
+            keyboardShouldPersistTaps="handled"
+        >
       {/* Avatar inicial */}
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>C</Text>
@@ -124,11 +142,11 @@ export default function LoginScreen() {
                     style={styles.eyeButton}
                     onPress={() => setIsPasswordVisible(!isPasswordVisible)} 
                 >
-                    <Ionicons 
-                        name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
-                        size={24} 
-                        color={palette.muted}
-                    />
+          <Ionicons 
+            name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
+            size={24} 
+            color={palette.muted}
+          />
                 </TouchableOpacity>
             )}
           </View>
@@ -169,7 +187,8 @@ export default function LoginScreen() {
           Regístrate
         </Link>
       </View>
-    </View>
+    </ScrollView> 
+    </KeyboardAvoidingView>
   );
 }
 
@@ -180,15 +199,20 @@ const { RADIUS, SPACING, FONT } = theme;
 const palette = theme.Colors.light;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.white,
-    padding: SPACING.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    keyboardAvoidingContainer: {
+        flex: 1,
+    },
+    scrollContainer: {
+        flex: 1,
+        backgroundColor: palette.white,
+    },
+    container: {
+        flexGrow: 1,
+        padding: SPACING.lg,
+        alignItems: "center",
+        justifyContent: "center", 
+    },
 
-  // 1. Contenedor que imita a 'input' pero permite un ícono adentro
   passwordInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',

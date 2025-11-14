@@ -281,17 +281,8 @@ const JobDetailsScreen = () => {
                         <Text style={styles.actionButtonTextPrimary}>Editar</Text>
                     </TouchableOpacity>
                 ) : (
-// --- VISTA TRABAJADOR: Botones Consultar y Postularme ---
+// --- VISTA TRABAJADOR: Botones Postularme ---
                     <> 
-                        {/* Botón para iniciar una consulta por chat */}
-                        <TouchableOpacity 
-                            style={styles.actionButtonSecondary}
-                            // onPress={() => router.push(`/chats/new?userId=${jobDetails?.contractor.id}`)} // TODO: Implementar navegación a chat
-                        >
-                            <Ionicons name="chatbubble-ellipses-outline" size={20} color={palette.tint} />
-                            <Text style={styles.actionButtonTextSecondary}>Consultar</Text>
-                        </TouchableOpacity>
-                        
                         {/* Botón para postularse a la changa */}
                         <TouchableOpacity 
                             style={styles.actionButtonPrimary}

@@ -9,13 +9,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
 import ReviewItem from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
-import { useProfileNavigation } from "@/hooks/use-profile-navigation"; // añadido
+import { useProfileNavigation } from "@/hooks/use-profile-navigation";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;

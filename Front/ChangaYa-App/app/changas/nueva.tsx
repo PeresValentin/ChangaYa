@@ -14,7 +14,9 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import theme from '../../constants/theme'; // Importa tu tema
 
@@ -48,11 +50,16 @@ const CrearChangaScreen = () => {
     ]);
     const [nuevoRequisito, setNuevoRequisito] = useState<string>(''); // Para añadir nuevos
 
-    // TODO: Implementar lógica para guardar borrador
-    const handleSaveDraft = () => {
-        console.log('Guardar Borrador:', { categoria, titulo, descripcion, precio, esUrgente, fecha, hora, ubicacion, requisitos });
-        // Aquí iría la lógica para guardar en AsyncStorage o Supabase como borrador
-        // router.back(); // Volver atrás después de guardar
+    // Función para descartar los cambios y volver
+    const handleDiscard = () => {
+        Alert.alert(
+        "Descartar cambios",
+            "¿Estás seguro de que querés salir? Perderás todo lo que escribiste.",
+        [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Salir", style: "destructive", onPress: () => router.back() }
+        ]
+            );
     };
 
     // TODO: Implementar lógica para publicar la changa
@@ -132,6 +139,10 @@ const CrearChangaScreen = () => {
                     headerShadowVisible: false,
                 }} 
             />
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingContainer} // Usamos un estilo nuevo
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
 
             <ScrollView 
                 style={styles.scroll} 
@@ -268,15 +279,16 @@ const CrearChangaScreen = () => {
 
              {/* --- Botones Inferiores --- */}
             <View style={styles.footerButtons}>
-                <TouchableOpacity style={styles.draftButton} onPress={handleSaveDraft}>
-                    <Ionicons name="save-outline" size={20} color={palette.tint} />
-                    <Text style={styles.draftButtonText}>Guardar borrador</Text>
+                <TouchableOpacity style={styles.draftButton} onPress={handleDiscard}>
+                    <Ionicons name="close-outline" size={20} color={palette.tint} />
+                    <Text style={styles.draftButtonText}>Descartar</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
                     <Ionicons name="checkmark-circle-outline" size={20} color={palette.white} />
                     <Text style={styles.publishButtonText}>Publicar</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
@@ -286,9 +298,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: palette.white, // Fondo blanco para el form
   },
+  keyboardAvoidingContainer: {
+    flex: 1,
+  },
   scroll: {
       flex: 1,
-  },
+    },
   scrollContent: {
       padding: SPACING.lg,
       paddingBottom: SPACING.lg * 5, // Espacio para botones fijos
