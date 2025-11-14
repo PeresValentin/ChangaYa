@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -95,12 +95,48 @@ export default function InicioContratanteScreen() {
   
   const pathname = usePathname();
 
-  const initials = useMemo(() => "Valentin".charAt(0), []);
+  
 
   const { goToProfile } = useProfileNavigation();
 
   const [changas, setChangas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+   const [userName, setUserName] = useState<string>("");
+  const [initials, setInitials] = useState("?");
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+        const storedName =
+          parsedUser?.nombre || parsedUser?.name || parsedUser?.nombreUsuario || "";
+
+        if (storedName) {
+          setUserName(storedName);
+
+          const computedInitials = storedName
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part: string) => part[0]?.toUpperCase())
+            .join("");
+
+          if (computedInitials) {
+            setInitials(computedInitials);
+          } else {
+            setInitials(storedName.charAt(0).toUpperCase());
+          }
+        }
+      } catch (error) {
+        console.error("Error al cargar los datos del usuario:", error);
+      }
+    };
+
+    loadUserData();
+  }, []);
 
   useEffect(() => {
     const fetchChangasByContratante = async () => {
@@ -143,7 +179,9 @@ export default function InicioContratanteScreen() {
           <View style={styles.header}>
             <View style={styles.headerText}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greeting}>¡Hola María!</Text>
+                <Text style={styles.greeting}>
+                  ¡Hola {(userName.trim().split(" ")[0] || "Usuario").trim()}!
+                </Text>
                 <HelloWave />
               </View>
               <Text style={styles.subtitle}>Gestiona tus changas</Text>
