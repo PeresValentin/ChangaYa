@@ -16,6 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
 import axios from "axios";
+import { useLoading } from '../../hooks/LoadingContext';
+
 export default function RegisterScreen() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const palette = theme.Colors.light;
@@ -23,6 +25,7 @@ export default function RegisterScreen() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [subscribe, setSubscribe] = useState(false);
   const router = useRouter();
+  const { showLoading, hideLoading } = useLoading();
   const [name, setName] = useState("");
   const [lastname, setLastname] = useState("");
   const [email, setEmail] = useState("");
@@ -32,6 +35,7 @@ export default function RegisterScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState(""); 
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+
   const handleRegister = async () => {
     if (!acceptTerms) {
       Alert.alert("Debes aceptar los términos y condiciones");
@@ -41,6 +45,7 @@ export default function RegisterScreen() {
       Alert.alert("Error", "Las contraseñas no coinciden. Por favor, verifícalas.");
       return; // Detiene la ejecución si no coinciden
     }
+    showLoading();
     try {
       const response = await axios.post(`${API_URL}/api/usuarios`, {
         nombreUsuario: email.split("@")[0], // o pedí un campo específico si lo tenés
@@ -65,6 +70,9 @@ export default function RegisterScreen() {
     } catch (error: any) {
       console.log("Detalles del error:", error.response?.data || error.message);
       Alert.alert("Error", "No se pudo registrar el usuario");
+    }
+    finally {
+      hideLoading();
     }
   };
 return (
