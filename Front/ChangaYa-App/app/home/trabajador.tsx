@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -92,18 +92,51 @@ export default function InicioTrabajadorScreen() {
   }, []);
 
 
-  const { goToProfile, currentUser } = useProfileNavigation();
+  const { goToProfile, currentUserId } = useProfileNavigation();
 
-  // Calculamos iniciales desde el nombre real (ej. María Rodríguez)
-  const initials = useMemo(() => {
-  if (!currentUser?.name) return "?";
-  return currentUser.name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
-}, [currentUser?.name]);
+  const [userName, setUserName] = useState("");
+  const [initials, setInitials] = useState("?");
+  const [userId, setUserId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+        const storedName =
+          parsedUser?.nombre || parsedUser?.name || parsedUser?.nombreUsuario || "";
+
+        if (storedName) {
+          setUserName(storedName);
+
+          const computedInitials = storedName
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part: string) => part[0]?.toUpperCase())
+            .join("");
+
+          if (computedInitials) {
+            setInitials(computedInitials);
+          } else {
+            setInitials(storedName.charAt(0).toUpperCase());
+          }
+        }
+
+        const storedId =
+          parsedUser?.id || parsedUser?._id || parsedUser?.usuarioID || parsedUser?.userId;
+        if (storedId) {
+          setUserId(String(storedId));
+        }
+      } catch (error) {
+        console.error("Error al cargar los datos del usuario:", error);
+      }
+    };
+
+    loadUserData();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -114,22 +147,23 @@ export default function InicioTrabajadorScreen() {
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <View style={styles.greetingRow}>
-              <Text style={styles.greeting}>¡Hola {currentUser.name.split(" ")[0]}!
-              </Text>
-                 <HelloWave />
-        </View>
-    <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
-  </View>
+            <View style={styles.headerText}>
+              <View style={styles.greetingRow}>
+                <Text style={styles.greeting}>
+                  ¡Hola {(userName.trim().split(" ")[0] || "Usuario").trim()}!
+                </Text>
+                <HelloWave />
+              </View>
+              <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
+            </View>
 
-  <TouchableOpacity
-    style={styles.avatar}
-    onPress={() => goToProfile(currentUser.id)} // Tocar avatar abre el perfil
-  >
-    <Text style={styles.avatarInitial}>{initials}</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity
+              style={styles.avatar}
+              onPress={() => goToProfile(userId || currentUserId)}
+            >
+              <Text style={styles.avatarInitial}>{initials}</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Barra de búsqueda */}
           <View style={styles.searchWrapper}>
