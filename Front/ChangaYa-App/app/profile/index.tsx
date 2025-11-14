@@ -1,4 +1,4 @@
-// Front/ChangaYa-App/app/perfil/index.tsx
+
 
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
@@ -61,13 +61,6 @@ const USER_PROFILE = {
   ],
 };
 
-const ACCOUNT_OPTIONS = [
-  { id: "favorites", label: "Favoritas", icon: "heart-outline" },
-  { id: "history", label: "Historial", icon: "time-outline" },
-  { id: "payments", label: "Métodos de pago", icon: "card-outline" },
-  { id: "notifications", label: "Notificaciones", icon: "notifications-outline" },
-  { id: "logout", label: "Cerrar sesión", icon: "log-out-outline" },
-] as const;
 
 const PerfilPrivadoScreen = () => {
   const router = useRouter();
@@ -83,38 +76,7 @@ const PerfilPrivadoScreen = () => {
     Math.min(1, Math.max(0, USER_PROFILE.generalScore)) * 100
   );
 
-  const { currentUserId } = useProfileNavigation(); // coherencia futura con navegación centralizada
-  const handleLogout = () => {
-    // 1. Preguntar al usuario si está seguro
-    Alert.alert(
-      "Cerrar Sesión",
-      "¿Estás seguro de que querés cerrar sesión?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Cerrar Sesión",
-          style: "destructive",
-          // 2. Si confirma, ejecutar la lógica asíncrona
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem("jwtToken");
-              await AsyncStorage.removeItem("userData");
-              router.back(); 
-              setTimeout(() => {
-                router.replace("/auth/welcome");
-              }, 100); // 100ms es usualmente suficiente
-            } catch (e) {
-              console.error("Error al cerrar sesión:", e);
-              Alert.alert("Error", "No se pudo cerrar la sesión.");
-            }
-          },
-        },
-      ]
-    );
-  };
+  const { currentUserId } = useProfileNavigation();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -137,6 +99,7 @@ const PerfilPrivadoScreen = () => {
           completedJobs={USER_PROFILE.completedJobs}
           avatarInitials={initials}
           showSettings
+          onSettingsPress={() => router.push("/profile/settings")}   
         />
 
         <View style={styles.sectionCard}>
@@ -169,35 +132,6 @@ const PerfilPrivadoScreen = () => {
           <View style={styles.reviewList}>
             {USER_PROFILE.reviews.map((review) => (
               <ReviewItem key={review.id} {...review} />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Opciones</Text>
-          <View style={styles.optionsList}>
-            {ACCOUNT_OPTIONS.map((option) => (
-              <TouchableOpacity 
-                key={option.id} 
-                style={styles.optionItem}
-                onPress={() => {
-                  if (option.id === 'notifications') {
-                    router.push('/notifications/notifications');
-                  }
-                  if (option.id === 'favorites') {
-                    router.push('/profile/favorites');
-                  }
-                  if (option.id === 'logout') {
-                    handleLogout(); // Asumiendo que 'handleLogout' está definida
-                  }
-                }}
-              >
-                <View style={styles.optionIconWrapper}>
-                  <Ionicons name={option.icon} size={20} color={palette.tint} />
-                </View>
-                <Text style={styles.optionLabel}>{option.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={palette.muted} />
-              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -272,37 +206,6 @@ const styles = StyleSheet.create({
   },
   reviewList: {
     gap: SPACING.md,
-  },
-  optionsList: {
-    gap: SPACING.sm,
-  },
-  optionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: palette.background,
-    gap: SPACING.md,
-  },
-  optionIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.white,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  optionLabel: {
-    flex: 1,
-    fontSize: FONT.md,
-    color: palette.text,
-    fontFamily: fontFamilies.rounded,
   },
 });
 
