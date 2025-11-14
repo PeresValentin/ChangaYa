@@ -7,9 +7,11 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 
 import theme from "../../constants/theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -125,10 +127,36 @@ const AjustesScreen = () => {
     case "help-center":
     case "contact-support":
       console.log(`Opción "${optionId}" aún no implementada.`);
+      
       break;
-
     case "logout":
-      console.log("Cerrar sesión");
+      Alert.alert(
+        "Cerrar Sesión",
+        "¿Estás seguro de que querés cerrar sesión?",
+        [
+          {
+            text: "Cancelar",
+            style: "cancel",
+          },
+          {
+            text: "Cerrar Sesión",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await AsyncStorage.removeItem("jwtToken");
+                await AsyncStorage.removeItem("userData");
+                    router.back(); 
+                setTimeout(() => {
+                  router.replace("/auth/welcome");
+                }, 100);
+              } catch (e) {
+                console.error("Error al cerrar sesión:", e);
+                Alert.alert("Error", "No se pudo cerrar la sesión.");
+              }
+            },
+          },
+        ]
+      );
       break;
   }
 };
