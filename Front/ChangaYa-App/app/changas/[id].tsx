@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 
 import {
     SafeAreaView,
@@ -14,7 +14,6 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
@@ -319,9 +318,21 @@ const JobDetailsScreen = () => {
                 setIsLoading(false);
                 return;
             }
-
-            const response = await axios.get<JobDetailsResponse>(`${API_URL}/api/changas/detalle/${id}`,
-                { headers: { Authorization: `Bearer ${token}` } });
+            const cacheBust = `_t=${new Date().getTime()}`;
+            
+            const response = await axios.get<JobDetailsResponse>(
+                `${API_URL}/api/changas/detalle/${id}`,
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        // Estas cabeceras le dicen a Axios y al servidor
+                        // que NO usen una respuesta en caché.
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                    } 
+                }
+            );
             setJobDetails(response.data);
         } catch (error: any) {
             console.error('Error al cargar la changa', error?.response?.data || error);
@@ -333,9 +344,21 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, id]);
 
-    useEffect(() => {
-        fetchJobDetails();
-    }, [fetchJobDetails]);
+useFocusEffect(
+  useCallback(() => {
+    // Esta función que le pasamos a useFocusEffect es síncrona
+    // y es lo que React espera.
+    
+    // Adentro, llamamos a nuestra función async
+    fetchJobDetails();
+
+    // Opcional: podés retornar una función de limpieza
+    return () => {
+      // console.log("Saliendo de foco de [id]");
+    };
+  }, [fetchJobDetails]) // La dependencia es la propia función 'fetchJobDetails'
+);
+
     useEffect(() => {
         if (!jobDetails?.changa) {
             setReverseGeocodedAddress(null);

@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLoading } from '../../../hooks/LoadingContext';
 import {
     Alert,
     SafeAreaView,
@@ -36,6 +37,7 @@ const EditarChangaScreen = () => {
 
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id?: string }>();
+    const { showLoading, hideLoading } = useLoading();
     const [categoria, setCategoria] = useState<string>('');
     const [titulo, setTitulo] = useState<string>('');
     const [descripcion, setDescripcion] = useState<string>('');
@@ -50,38 +52,46 @@ const EditarChangaScreen = () => {
     ]);
     const [nuevoRequisito, setNuevoRequisito] = useState<string>(''); // Para añadir nuevos
 
-// --- DATOS SIMULADOS (Reemplazar con un fetch real) ---
-const DUMMY_CHANGA_DATA = {
-    categoria: 'Plomería',
-    titulo: 'Reparación de canilla que gotea',
-    descripcion: 'Se rompió la canilla del baño y está perdiendo mucha agua.',
-    precio: '15000',
-    esUrgente: true,
-    fecha: 'Hoy',
-    hora: '10:00 AM',
-    ubicacion: 'Calle 50 y 15, La Plata',
-    requisitos: ['Experiencia en plomería', 'Disponibilidad inmediata']
-};
-
-// useEffect para poblar el formulario cuando la pantalla carga
 useEffect(() => {
-    if (id) {
+    // 1. Definimos la función async DENTRO del useEffect
+    const fetchChangaData = async () => {
+        if (!id) {
+            Alert.alert("Error", "No se proporcionó un ID de changa.");
+            router.back();
+            return;
+        }
         console.log("Cargando datos para editar changa ID:", id);
-        // AQUÍ HARÍAS EL FETCH A TU API:
-        // const data = await axios.get(`${API_URL}/api/changas/${id}`, ...);
-        // Por ahora, usamos los datos hardcodeados
-        const data = DUMMY_CHANGA_DATA;
-        setCategoria(data.categoria);
-        setTitulo(data.titulo);
-        setDescripcion(data.descripcion);
-        setPrecio(data.precio);
-        setEsUrgente(data.esUrgente);
-        setFecha(data.fecha);
-        setHora(data.hora);
-        setUbicacion(data.ubicacion);
-        setRequisitos(data.requisitos);
-    }
-}, [id]); // Se ejecuta cada vez que el 'id' cambie
+        showLoading(); // <-- 2. Mostramos el spinner
+        try {
+            const token = await AsyncStorage.getItem("jwtToken");
+            const response = await axios.get(`${API_URL}/api/changas/detalle/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = response.data.changa; 
+            if (!data) {
+                throw new Error("La API no devolvió el objeto 'changa' esperado.");
+            }
+            // POBLAMOS LOS ESTADOS
+            // 'categoria' sigue sin venir en la respuesta de la API.
+            // Este campo quedará vacío a menos que el campo se llame distinto.
+            setCategoria(data.categoria || ''); 
+            setTitulo(data.titulo || ''); // 'titulo' existe
+            setDescripcion(data.descripcion || ''); // 'descripcion' existe
+            setPrecio(String(data.remuneracion || '')); // 'remuneracion' existe
+            setEsUrgente(data.esUrgente || false); // 'esUrgente' existe
+            setUbicacion(data.ubicacion || ''); // 'ubicacion' exist
+            setRequisitos(data.habilidades || []); // 'habilidades' existe
+        } catch (error: any) {
+            console.error("Error al cargar la changa:", error.response?.data || error.message);
+            Alert.alert("Error al cargar", "No se pudieron obtener los datos de la changa.");
+            router.back();
+        } finally {
+            hideLoading();
+        }
+    };
+    // 6. Llamamos a la función async
+    fetchChangaData();
+}, [id, API_URL, router]);
 
     // Función para descartar los cambios y volver
     const handleDiscard = () => {
@@ -141,9 +151,18 @@ useEffect(() => {
                                 },
                             }
                         );
+
+                        if (!id || typeof id !== 'string') {
+                        Alert.alert("Error de ID", "No se encontró el ID de la changa para guardar.");
+                        // Si tenés un 'hideLoading()', ponelo acá también
+                        return; // Cortamos la ejecución si el id no es válido
+                        }
                             if (response.status === 200) {
                                 Alert.alert("✅ Changa Actualizada", "Tus cambios se guardaron con éxito.");
-                                router.back();
+                                router.replace({
+                                pathname: "/changas/[id]",
+                                params: { id: id, viewMode: "contratante" } // Pasá los mismos params que ya tenías
+                            });
                             } else {
                                 Alert.alert("Error", `El servidor respondió con código ${response.status}`);
                         }
