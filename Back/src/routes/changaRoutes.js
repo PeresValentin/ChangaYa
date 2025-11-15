@@ -21,9 +21,7 @@ router.get('/contratante', verificarToken, getChangasByContratante)
 router.get('/detalle/:id', verificarToken, getChangaDetalle)
 
 router.post('/', verificarToken, createChanga)
-
 router.put('/:id', verificarToken, updateChanga)
-
 router.delete('/:id', verificarToken, deleteChanga)
 
 export default router
