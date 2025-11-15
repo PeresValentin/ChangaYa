@@ -22,6 +22,46 @@ import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
+const sanitizeName = (value?: string) => {
+  if (!value || typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return trimmed;
+};
+
+const buildDisplayName = (userLike: any) => {
+  if (!userLike) return "";
+
+  const composed = [sanitizeName(userLike?.nombre), sanitizeName(userLike?.apellido)]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const candidates = [
+    sanitizeName(userLike?.nombreCompleto),
+    sanitizeName(userLike?.fullName),
+    composed,
+    sanitizeName(userLike?.nombre),
+    sanitizeName(userLike?.name),
+    sanitizeName(userLike?.nombreUsuario),
+  ];
+
+  return candidates.find((candidate) => Boolean(candidate)) || "";
+};
+
+const buildInitials = (displayName: string) => {
+  if (!displayName) return "?";
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || displayName.charAt(0).toUpperCase() || "?";
+};
+
+
 type JobVariant = "primary" | "secondary";
 
 // Navegación inferior rápida
@@ -105,24 +145,11 @@ export default function InicioTrabajadorScreen() {
         if (!storedUser) return;
 
         const parsedUser = JSON.parse(storedUser);
-        const storedName =
-          parsedUser?.nombre || parsedUser?.name || parsedUser?.nombreUsuario || "";
-
-        if (storedName) {
-          setUserName(storedName);
-
-          const computedInitials = storedName
-            .split(" ")
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part: string) => part[0]?.toUpperCase())
-            .join("");
-
-          if (computedInitials) {
-            setInitials(computedInitials);
-          } else {
-            setInitials(storedName.charAt(0).toUpperCase());
-          }
+        
+        const derivedName = buildDisplayName(parsedUser);
+        if (derivedName) {
+          setUserName(derivedName);
+          setInitials(buildInitials(derivedName));
         }
 
         const storedId =
@@ -130,13 +157,26 @@ export default function InicioTrabajadorScreen() {
         if (storedId) {
           setUserId(String(storedId));
         }
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token || !storedId) return;
+
+        const response = await axios.get(`${API_URL}/api/usuarios/${storedId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const apiName = buildDisplayName(response.data);
+        if (apiName) {
+          setUserName(apiName);
+          setInitials(buildInitials(apiName));
+        }
       } catch (error) {
         console.error("Error al cargar los datos del usuario:", error);
       }
     };
 
     loadUserData();
-  }, []);
+  }, [API_URL]);
+
 
   return (
     <SafeAreaView style={styles.safeArea}>

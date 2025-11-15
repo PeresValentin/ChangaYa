@@ -21,6 +21,43 @@ import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 // CONSTANTES DEL TEMA
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
+const sanitizeName = (value?: string) => {
+  if (!value || typeof value !== "string") return "";
+  return value.trim();
+};
+
+const buildDisplayName = (userLike: any) => {
+  if (!userLike) return "";
+
+  const composed = [sanitizeName(userLike?.nombre), sanitizeName(userLike?.apellido)]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const candidates = [
+    sanitizeName(userLike?.nombreCompleto),
+    sanitizeName(userLike?.fullName),
+    composed,
+    sanitizeName(userLike?.nombre),
+    sanitizeName(userLike?.name),
+    sanitizeName(userLike?.nombreUsuario),
+  ];
+
+  return candidates.find((candidate) => Boolean(candidate)) || "";
+};
+
+const buildInitials = (displayName: string) => {
+  if (!displayName) return "?";
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || displayName.charAt(0).toUpperCase() || "?";
+};
 // =========================================================
 // DATOS DE EJEMPLO (Refactorizados al nuevo diseño)
 // =========================================================
@@ -111,24 +148,26 @@ export default function InicioContratanteScreen() {
         if (!storedUser) return;
 
         const parsedUser = JSON.parse(storedUser);
-        const storedName =
-          parsedUser?.nombre || parsedUser?.name || parsedUser?.nombreUsuario || "";
+         const derivedName = buildDisplayName(parsedUser);
+        if (derivedName) {
+          setUserName(derivedName);
+          setInitials(buildInitials(derivedName));
+        }
 
-        if (storedName) {
-          setUserName(storedName);
+        const storedId =
+          parsedUser?.id || parsedUser?._id || parsedUser?.usuarioID || parsedUser?.userId;
 
-          const computedInitials = storedName
-            .split(" ")
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part: string) => part[0]?.toUpperCase())
-            .join("");
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token || !storedId) return;
 
-          if (computedInitials) {
-            setInitials(computedInitials);
-          } else {
-            setInitials(storedName.charAt(0).toUpperCase());
-          }
+        const response = await axios.get(`${API_URL}/api/usuarios/${storedId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const apiName = buildDisplayName(response.data);
+        if (apiName) {
+          setUserName(apiName);
+          setInitials(buildInitials(apiName));
         }
       } catch (error) {
         console.error("Error al cargar los datos del usuario:", error);
@@ -136,7 +175,7 @@ export default function InicioContratanteScreen() {
     };
 
     loadUserData();
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     const fetchChangasByContratante = async () => {
