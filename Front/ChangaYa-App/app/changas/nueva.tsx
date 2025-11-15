@@ -44,11 +44,11 @@ const CrearChangaScreen = () => {
     const [fecha, setFecha] = useState<string>('Hoy'); // Placeholder, idealmente un Date
     const [hora, setHora] = useState<string>('10:00 AM'); // Placeholder
     const [ubicacion, setUbicacion] = useState<string>('');
-    const [requisitos, setRequisitos] = useState<string[]>([ // Ejemplo inicial
+    const [habilidades, setHabilidades] = useState<string[]>([ // Ejemplo inicial
         'Experiencia en plomería',
         'Disponibilidad inmediata',
     ]);
-    const [nuevoRequisito, setNuevoRequisito] = useState<string>(''); // Para añadir nuevos
+    const [nuevaHabilidad, setNuevaHabilidad] = useState<string>(''); // Para añadir nuevos
 
     // Función para descartar los cambios y volver
     const handleDiscard = () => {
@@ -114,18 +114,18 @@ const CrearChangaScreen = () => {
         }
         };
     
-    // TODO: Lógica para añadir un requisito (simplificada)
+    // TODO: Lógica para añadir un habilidad (simplificada)
     const handleAddRequisito = () => {
-        if (nuevoRequisito.trim()) {
-            setRequisitos([...requisitos, nuevoRequisito.trim()]);
-            setNuevoRequisito(''); // Limpiar input (si tuvieras uno visible)
+        if (nuevaHabilidad.trim()) {
+            setHabilidades([...habilidades, nuevaHabilidad.trim()]);
+            setNuevaHabilidad(''); // Limpiar input (si tuvieras uno visible)
         }
-         console.log("Añadir requisito (simulado)"); // Placeholder
+         console.log("Añadir habilidad (simulado)"); // Placeholder
     };
     
-    // TODO: Lógica para quitar un requisito (opcional)
+    // TODO: Lógica para quitar un habilidad (opcional)
     const handleRemoveRequisito = (indexToRemove: number) => {
-        setRequisitos(requisitos.filter((_, index) => index !== indexToRemove));
+        setHabilidades(habilidades.filter((_, index) => index !== indexToRemove));
     };
 
     // --- Renderizado ---
@@ -255,10 +255,10 @@ const CrearChangaScreen = () => {
                     </View>
                 </View>
 
-                {/* --- Requisitos (opcional) --- */}
+                {/* --- Habilidades (opcional) --- */}
                 <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Requisitos (opcional)</Text>
-                    {requisitos.map((req, index) => (
+                    <Text style={styles.label}>Habilidades (opcional)</Text>
+                    {habilidades.map((req, index) => (
                         <View key={index} style={styles.requirementItem}>
                             <Ionicons name="checkmark-circle" size={20} color={palette.tint} />
                             <Text style={styles.requirementText}>{req}</Text>
@@ -268,10 +268,10 @@ const CrearChangaScreen = () => {
                             </TouchableOpacity>
                         </View>
                     ))}
-                    {/* // TODO: Mostrar un TextInput para añadir nuevo requisito */}
+                    {/* // TODO: Mostrar un TextInput para añadir nuevo habilidad */}
                     <TouchableOpacity style={styles.addRequirementButton} onPress={handleAddRequisito}>
                         <Ionicons name="add-circle-outline" size={20} color={palette.tint} />
-                        <Text style={styles.addRequirementText}>Agregar requisito</Text>
+                        <Text style={styles.addRequirementText}>Agregar habilidad</Text>
                     </TouchableOpacity>
                 </View>
 
