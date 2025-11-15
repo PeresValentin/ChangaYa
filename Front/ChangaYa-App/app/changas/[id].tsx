@@ -49,7 +49,7 @@ interface ApiChanga {
     estado?: string;
     direccion?: string;
     ubicacion?: string;
-    trabajadorID?: string | null;
+    trabajadores?: string[];
     contratanteID?: string | null;
     // TODO: agregar requisitos/localización detallada cuando el backend lo provea
     requisitos?: string | string[] | null;
@@ -186,15 +186,25 @@ const JobDetailsScreen = () => {
             .filter((candidate): candidate is PersonSummary => Boolean(candidate?.id));
     }, [jobDetails?.postulaciones]);
 
-    const assignedWorker = useMemo(() => {
-        if (!isContractor || !jobDetails?.changa?.trabajadorID) return null;
-        return applicants.find((applicant) => applicant.id === String(jobDetails.changa.trabajadorID)) || null;
-    }, [applicants, isContractor, jobDetails?.changa?.trabajadorID]);
+    const assignedWorkers = useMemo(() => {
+        if (!isContractor) return [];
+
+        const assignedIDs = jobDetails?.changa?.trabajadores || [];
+        if (assignedIDs.length === 0) return [];
+
+        return applicants.filter((a) => assignedIDs.includes(a.id));
+    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
 
     const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
 
-    const profile = isContractor ? assignedWorker : contractorSummary;
-    const profileLabel = isContractor ? 'Trabajador asignado' : 'Contratante';
+    const profile = isContractor ? assignedWorkers : contractorSummary;
+    const profileLabel =
+        isContractor && !assignedWorkers
+            ? null                   // 👉 OCULTAR si contratado y SIN asignado
+            : isContractor
+                ? 'Trabajador asignado'
+                : 'Contratante';
+
     const hasApplicants = isContractor && applicants.length > 0;
 
     if (isLoading) {
@@ -319,50 +329,102 @@ const JobDetailsScreen = () => {
                     )}
                 </View>
 
-               {/* Contratante o Trabajador */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>{profileLabel}</Text>
-                    {profile ? (
-                        <View style={styles.contractorCard}>
-                            <View style={styles.contractorAvatar}>
-                                <Text style={styles.contractorInitials}>{profile.initials}</Text>
-                            </View>
+                {/* ────────────────────────────────────────────────
+                    SECCIÓN: CONTRATANTE / TRABAJADOR ASIGNADO
+                ──────────────────────────────────────────────── */}
 
-                            <View style={styles.contractorInfo}>
-                                <Text style={styles.contractorName}>{profile.name}</Text>
-                                {typeof profile.rating === 'number' && (
-                                    <Text style={styles.ratingText}>⭐ {profile.rating.toFixed(1)}</Text>
-                                )}
-                                <Text style={styles.memberSinceText}>
-                                    {profile.phone ? `Tel: ${profile.phone}` : profile.email || 'Sin datos de contacto'}
+                {/** CONTRATANTE viendo la changa **/}
+                {isContractor ? (
+                    <>
+                        {assignedWorkers.length > 0 && (
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>
+                                    {assignedWorkers.length === 1
+                                        ? "Trabajador asignado"
+                                        : "Trabajadores asignados"}
                                 </Text>
-                                {profile.memberSince && (
-                                    <Text style={styles.memberSinceText}>Miembro desde {profile.memberSince}</Text>
-                                )}
-                            </View>
 
-                            {profile.id ? (
+                                {assignedWorkers.map((worker) => (
+                                    <View key={worker.id} style={styles.contractorCard}>
+                                        <View style={styles.contractorAvatar}>
+                                            <Text style={styles.contractorInitials}>{worker.initials}</Text>
+                                        </View>
+
+                                        <View style={styles.contractorInfo}>
+                                            <Text style={styles.contractorName}>{worker.name}</Text>
+
+                                            {typeof worker.rating === "number" && (
+                                                <Text style={styles.ratingText}>⭐ {worker.rating.toFixed(1)}</Text>
+                                            )}
+
+                                            {worker.phone && (
+                                                <Text style={styles.memberSinceText}>Tel: {worker.phone}</Text>
+                                            )}
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={styles.profileButton}
+                                            onPress={() => goToProfile(worker.id)}
+                                        >
+                                            <Text style={styles.profileButtonText}>Ver perfil</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </>
+                ) : (
+                    /** TRABAJADOR viendo al CONTRATANTE **/
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Contratante</Text>
+
+                        {contractorSummary ? (
+                            <View style={styles.contractorCard}>
+                                <View style={styles.contractorAvatar}>
+                                    <Text style={styles.contractorInitials}>{contractorSummary.initials}</Text>
+                                </View>
+
+                                <View style={styles.contractorInfo}>
+                                    <Text style={styles.contractorName}>{contractorSummary.name}</Text>
+
+                                    {typeof contractorSummary.rating === "number" && (
+                                        <Text style={styles.ratingText}>
+                                            ⭐ {contractorSummary.rating.toFixed(1)}
+                                        </Text>
+                                    )}
+
+                                    {contractorSummary.phone ? (
+                                        <Text style={styles.memberSinceText}>Tel: {contractorSummary.phone}</Text>
+                                    ) : (
+                                        <Text style={styles.memberSinceText}>{contractorSummary.email}</Text>
+                                    )}
+
+                                    {contractorSummary.memberSince && (
+                                        <Text style={styles.memberSinceText}>
+                                            Miembro desde {contractorSummary.memberSince}
+                                        </Text>
+                                    )}
+                                </View>
+
                                 <TouchableOpacity
                                     style={styles.profileButton}
-                                    onPress={() => goToProfile(profile.id)}
+                                    onPress={() => goToProfile(contractorSummary.id)}
                                 >
                                     <Text style={styles.profileButtonText}>Ver perfil</Text>
                                 </TouchableOpacity>
-                            ) : null}
-                        </View>
-                    ) : (
-                        <Text style={styles.bodyText}>
-                            {isContractor
-                                ? 'Todavía no hay un trabajador asignado.'
-                                : 'No pudimos recuperar al contratante. Intenta nuevamente más tarde.'}
-                        </Text>
-                    )}
-                </View>
+                            </View>
+                        ) : (
+                            <Text style={styles.bodyText}>
+                                No pudimos recuperar los datos del contratante.
+                            </Text>
+                        )}
+                    </View>
+                )}
                 {/* Postulantes */}
                 {hasApplicants && (
                     <View style={styles.section}>
                         <View style={styles.applicantsHeader}>
-                            <Text style={styles.sectionTitle}>Trabajadores postulados</Text>
+                            <Text style={styles.sectionTitle}>Postulantes</Text>
                              <Text style={styles.applicantsCounter}>{applicants.length}</Text>
                         </View>
 
