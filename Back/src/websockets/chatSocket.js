@@ -1,19 +1,27 @@
 // websockets/chatSocket.js
 
-export function chatSocket(io) {
-  io.on("connection", (socket) => {
-    console.log("🟢 Usuario conectado al chat");
+// chatSocket.js
+export function initChatSocket(io) {
+  console.log("🔌 WebSocket de Chat inicializado.");
 
-    socket.on("joinChat", (chatID) => {
+  io.on("connection", (socket) => {
+    console.log("✨ Usuario conectado al WebSocket:", socket.id);
+
+    // Prepáralo para rooms por chat
+    socket.on("join_chat", (chatID) => {
+      console.log(`📥 Usuario se une al chat: ${chatID}`);
       socket.join(chatID);
     });
 
-    socket.on("nuevoMensaje", (msg) => {
-      io.to(msg.chatID).emit("mensajeRecibido", msg);
+    // Recibir un mensaje y reenviarlo a la room correspondiente
+    socket.on("nuevo_mensaje", ({ chatID, mensaje }) => {
+      console.log("💬 Mensaje recibido:", mensaje);
+      io.to(chatID).emit("mensaje_recibido", mensaje);
     });
 
     socket.on("disconnect", () => {
-      console.log("🔴 Usuario desconectado del chat");
+      console.log("❌ Usuario desconectado:", socket.id);
     });
   });
 }
+
