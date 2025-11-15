@@ -17,7 +17,7 @@ chatSocket(io);
 const app = express()
 app.use(cors())
 app.use(express.json())
-
+//un comentario de prueba
 // Rutas principales
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/changas', changaRoutes)
