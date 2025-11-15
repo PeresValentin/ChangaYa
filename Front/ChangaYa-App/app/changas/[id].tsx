@@ -71,6 +71,8 @@ interface NominatimReverseResponse {
         city?: string;
         town?: string;
         village?: string;
+         hamlet?: string;
+        quarter?: string;
     };
 }
 
@@ -358,16 +360,20 @@ const JobDetailsScreen = () => {
                 if (isCancelled) return;
 
                 const data = response.data;
-                const candidate = data?.display_name
-                    || [
-                        data?.address?.road,
-                        data?.address?.house_number,
-                        data?.address?.suburb || data?.address?.neighbourhood,
-                        data?.address?.city || data?.address?.town || data?.address?.village,
-                        
-                    ]
-                        .filter(Boolean)
-                        .join(' ');
+                const address = data?.address || {};
+                const streetLine = [address.road, address.house_number]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim();
+                const areaLine = address.suburb || address.neighbourhood || address.quarter || '';
+                const cityLine = address.city || address.town || address.village || address.hamlet || '';
+                const candidate = [streetLine || null, areaLine || null, cityLine || null]
+                    .filter(Boolean)
+                    .join(', ')
+                    .trim()
+                    || streetLine
+                    || data?.display_name
+                    || null;
 
                 setReverseGeocodedAddress(candidate || null);
             } catch (geocodeError: any) {
