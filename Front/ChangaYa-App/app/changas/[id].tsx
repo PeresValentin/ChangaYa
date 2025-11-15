@@ -51,8 +51,8 @@ interface ApiChanga {
     ubicacion?: string;
     trabajadores?: string[];
     contratanteID?: string | null;
-    // TODO: agregar requisitos/localización detallada cuando el backend lo provea
-    requisitos?: string | string[] | null;
+    // TODO: agregar habilidades/localización detallada cuando el backend lo provea
+    habilidades?: string | string[] | null;
 }
 
 interface JobDetailsResponse {
@@ -90,14 +90,25 @@ const sanitizeName = (value?: string | null) => (value ?? '').trim();
 
 const buildDisplayName = (userLike?: ApiUser | null) => {
     if (!userLike) return '';
-    const composed = [sanitizeName(userLike?.nombre), sanitizeName(userLike?.apellido)]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-    const candidates = [sanitizeName(userLike?.nombreUsuario), composed, sanitizeName(userLike?.nombre)]
-        .filter(Boolean);
-    return candidates[0] || '';
+
+    const first = sanitizeName(userLike?.nombre);
+    const last = sanitizeName(userLike?.apellido);
+    const fullname = [first, last].filter(Boolean).join(' ').trim();
+    const username = sanitizeName(userLike?.nombreUsuario);
+
+    // PRIORIDAD:
+    // 1. nombre + apellido
+    if (fullname) return fullname;
+
+    // 2. solo nombre
+    if (first) return first;
+
+    // 3. username
+    if (username) return username;
+
+    return '';
 };
+
 
 const buildInitials = (name: string) => {
     if (!name) return '?';
@@ -137,11 +148,11 @@ const formatCurrency = (value?: number | string | null) => {
     return String(value);
 };
 
-const extractRequirements = (changa: ApiChanga) => {
-    if (!changa.requisitos) return [];
-    if (Array.isArray(changa.requisitos)) return changa.requisitos;
+const extractHabilities = (changa: ApiChanga) => {
+    if (!changa.habilidades) return [];
+    if (Array.isArray(changa.habilidades)) return changa.habilidades;
     // TODO: reemplazar este split cuando el backend envíe un array normalizado
-    return changa.requisitos.split(',').map((req) => req.trim()).filter(Boolean);
+    return changa.habilidades.split(',').map((req) => req.trim()).filter(Boolean);
 
 
 };
@@ -451,7 +462,7 @@ const JobDetailsScreen = () => {
     }
 
     const { changa } = jobDetails;
-    const requirements = extractRequirements(changa);
+    const habilities = extractHabilities(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
     const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
@@ -525,15 +536,15 @@ const JobDetailsScreen = () => {
                    <Text style={styles.bodyText}>{changa.descripcion || 'El contratante no agregó descripción.'}</Text>
                 </View>
 
-                {/* Requisitos */}
+                {/* Habilidades */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Requisitos</Text>
-                 {requirements.length === 0 ? (
+                    <Text style={styles.sectionTitle}>Habilidades requeridas</Text>
+                 {habilities.length === 0 ? (
                         <Text style={styles.bodyText}>
-                            Aún no se cargaron requisitos específicos para esta changa.
+                            No existen habilidades requeridas para esta changa.
                         </Text>
                     ) : (
-                        requirements.map((req, i) => (
+                        habilities.map((req, i) => (
                             <View key={i} style={styles.requirementRow}>
                                 <Ionicons name="checkmark-circle-outline" size={18} color={palette.tint} />
                                 <Text style={styles.bodyText}>{req}</Text>
