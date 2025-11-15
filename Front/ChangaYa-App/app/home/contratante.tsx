@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -21,6 +21,43 @@ import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 // CONSTANTES DEL TEMA
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
+const sanitizeName = (value?: string) => {
+  if (!value || typeof value !== "string") return "";
+  return value.trim();
+};
+
+const buildDisplayName = (userLike: any) => {
+  if (!userLike) return "";
+
+  const composed = [sanitizeName(userLike?.nombre), sanitizeName(userLike?.apellido)]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const candidates = [
+    sanitizeName(userLike?.nombreCompleto),
+    sanitizeName(userLike?.fullName),
+    composed,
+    sanitizeName(userLike?.nombre),
+    sanitizeName(userLike?.name),
+    sanitizeName(userLike?.nombreUsuario),
+  ];
+
+  return candidates.find((candidate) => Boolean(candidate)) || "";
+};
+
+const buildInitials = (displayName: string) => {
+  if (!displayName) return "?";
+
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || displayName.charAt(0).toUpperCase() || "?";
+};
 // =========================================================
 // DATOS DE EJEMPLO (Refactorizados al nuevo diseño)
 // =========================================================
@@ -85,6 +122,16 @@ const quickLinks: {
 
   },
 ];
+const getNormalizedChangaId = (rawChanga: any) => {
+  const possibleId =
+    rawChanga?.id ??
+    rawChanga?.changaID ??
+    rawChanga?.changaId ??
+    rawChanga?.ChangaID ??
+    rawChanga?.ChangaId;
+
+  return possibleId ? String(possibleId) : undefined;
+};
 // =========================================================
 // COMPONENTE PRINCIPAL
 // =========================================================
@@ -95,12 +142,50 @@ export default function InicioContratanteScreen() {
   
   const pathname = usePathname();
 
-  const initials = useMemo(() => "Valentin".charAt(0), []);
+  
 
   const { goToProfile } = useProfileNavigation();
 
   const [changas, setChangas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+   const [userName, setUserName] = useState<string>("");
+  const [initials, setInitials] = useState("?");
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+         const derivedName = buildDisplayName(parsedUser);
+        if (derivedName) {
+          setUserName(derivedName);
+          setInitials(buildInitials(derivedName));
+        }
+
+        const storedId =
+          parsedUser?.id || parsedUser?._id || parsedUser?.usuarioID || parsedUser?.userId;
+
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token || !storedId) return;
+
+        const response = await axios.get(`${API_URL}/api/usuarios/${storedId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const apiName = buildDisplayName(response.data);
+        if (apiName) {
+          setUserName(apiName);
+          setInitials(buildInitials(apiName));
+        }
+      } catch (error) {
+        console.error("Error al cargar los datos del usuario:", error);
+      }
+    };
+
+    loadUserData();
+  }, [API_URL]);
 
   useEffect(() => {
     const fetchChangasByContratante = async () => {
@@ -119,7 +204,14 @@ export default function InicioContratanteScreen() {
           }
         );
 
-        setChangas(response.data); // el backend devuelve un array de changas
+        const responseData = Array.isArray(response.data) ? response.data : [];
+
+        const normalized = responseData.map((rawChanga: any) => ({
+          ...rawChanga,
+          id: getNormalizedChangaId(rawChanga),
+        }));
+
+        setChangas(normalized); // el backend devuelve un array de changas
       } catch (error: any) {
         console.error("Error al obtener changas del contratante:", error.response?.data || error.message);
         Alert.alert("Error", "No se pudieron cargar tus changas activas.");
@@ -143,7 +235,9 @@ export default function InicioContratanteScreen() {
           <View style={styles.header}>
             <View style={styles.headerText}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greeting}>¡Hola María!</Text>
+                <Text style={styles.greeting}>
+                  ¡Hola {(userName.trim().split(" ")[0] || "Usuario").trim()}!
+                </Text>
                 <HelloWave />
               </View>
               <Text style={styles.subtitle}>Gestiona tus changas</Text>
@@ -201,12 +295,19 @@ export default function InicioContratanteScreen() {
                   <TouchableOpacity
                     key={changa.id || changa.changaID || Math.random().toString()}
                     style={styles.card}
-                    onPress={() =>
+                    onPress={() => {
+                      if (!changa.id) {
+                        Alert.alert(
+                          "No pudimos abrir esta changa",
+                          "Faltan datos para identificarla. Intentalo más tarde."
+                        );
+                        return;
+                      }
                       router.push({
                         pathname: "/changas/[id]",
                         params: { id: changa.id, viewMode: "contratante" },
-                      })
-                    }
+                      });
+                    }}
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardIconWrapper}>
