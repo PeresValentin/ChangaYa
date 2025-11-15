@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Stack, useLocalSearchParams } from 'expo-router';
+
 
 import {
     SafeAreaView,
@@ -685,7 +685,7 @@ const JobDetailsScreen = () => {
                             onPress={() => 
                                 router.push({ 
                                     pathname: "/changas/editar/[id]",
-                                    params: { id: jobDetails.id }
+                                    params: { id: jobDetails.changa.changaID }
                                 })
                             }
                         >
