@@ -61,6 +61,19 @@ interface JobDetailsResponse {
     postulaciones?: ApiPostulacion[];
 }
 
+interface NominatimReverseResponse {
+    display_name?: string;
+    address?: {
+        road?: string;
+        house_number?: string;
+        neighbourhood?: string;
+        suburb?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+    };
+}
+
 interface PersonSummary {
     id: string;
     initials: string;
@@ -139,11 +152,12 @@ const parseDate = (value?: string | null) => {
 
 const formatDateLabel = (date: Date, includeTime = false) => {
     const datePart = new Intl.DateTimeFormat('es-AR', {
-        weekday: 'short',
-        day: '2-digit',
+        weekday: 'long',
+        day: 'numeric',
         month: 'long',
-        year: 'numeric',
-    }).format(date);
+    })
+        .format(date)
+        .replace(/,\s*/g, ' ');
 
     if (!includeTime) {
         return datePart;
@@ -164,24 +178,17 @@ const formatSchedule = (startTime?: string, endTime?: string) => {
 
     if (startDate && endDate) {
         const sameDay = startDate.toDateString() === endDate.toDateString();
-        if (sameDay) {
-            const dayLabel = formatDateLabel(startDate, false);
-            const startLabel = new Intl.DateTimeFormat('es-AR', {
-                hour: '2-digit',
-                minute: '2-digit',
-            }).format(startDate);
-            const endLabel = new Intl.DateTimeFormat('es-AR', {
-                hour: '2-digit',
-                minute: '2-digit',
-            }).format(endDate);
-            return `${dayLabel} · ${startLabel} - ${endLabel} hs`;
+        if (startDate) {
+        return formatDateLabel(startDate, true);
         }
 
         return `${formatDateLabel(startDate, true)} - ${formatDateLabel(endDate, true)}`;
     }
 
-    if (startDate) return formatDateLabel(startDate, true);
-    if (endDate) return formatDateLabel(endDate, true);
+    
+    if (endDate) {
+        return formatDateLabel(endDate, true);
+    }
 
     return 'Horario a coordinar';
 };
@@ -249,12 +256,21 @@ const parsePointCoordinates = (value?: string | null): Coordinates | null => {
     return parsePointFromWKT(trimmed) || parsePointFromEWKB(trimmed);
 };
 
-const formatLocation = (changa: ApiChanga) => {
-    if (changa.direccion?.trim()) {
-        return changa.direccion.trim();
+const formatLocation = (
+    changa: ApiChanga,
+    reverseAddress?: string | null,
+    coordinates?: Coordinates | null,
+) => {
+    const trimmedAddress = changa.direccion?.trim();
+    if (trimmedAddress) {
+        return trimmedAddress;
     }
 
-    const coordinates = parsePointCoordinates(changa.ubicacion);
+    if (reverseAddress?.trim()) {
+        return reverseAddress.trim();
+    }
+
+   
     if (coordinates) {
         return `Lat ${coordinates.latitude.toFixed(4)}, Lon ${coordinates.longitude.toFixed(4)}`;
     }
@@ -270,7 +286,9 @@ const JobDetailsScreen = () => {
     const [jobDetails, setJobDetails] = useState<JobDetailsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [reverseGeocodedAddress, setReverseGeocodedAddress] = useState<string | null>(null);
 
+    const coordinates = useMemo(() => parsePointCoordinates(jobDetails?.changa?.ubicacion), [jobDetails?.changa?.ubicacion]);
     const fetchJobDetails = useCallback(async () => {
         if (!id) {
             setErrorMessage('No se encontró el identificador de la changa.');
@@ -304,6 +322,69 @@ const JobDetailsScreen = () => {
     useEffect(() => {
         fetchJobDetails();
     }, [fetchJobDetails]);
+    useEffect(() => {
+        if (!jobDetails?.changa) {
+            setReverseGeocodedAddress(null);
+            return;
+        }
+
+        const trimmedAddress = jobDetails.changa.direccion?.trim();
+        if (trimmedAddress || !coordinates) {
+            setReverseGeocodedAddress(null);
+            return;
+        }
+
+        let isCancelled = false;
+
+        const fetchAddress = async () => {
+            setReverseGeocodedAddress(null);
+
+            try {
+                const response = await axios.get<NominatimReverseResponse>('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: coordinates.latitude,
+                        lon: coordinates.longitude,
+                        zoom: 18,
+                        addressdetails: 1,
+                    },
+                    headers: {
+                        'Accept-Language': 'es-AR',
+                        'User-Agent': 'ChangaYaApp/1.0 (https://changaya.app/soporte)',
+                    },
+                    timeout: 8000,
+                });
+
+                if (isCancelled) return;
+
+                const data = response.data;
+                const candidate = data?.display_name
+                    || [
+                        data?.address?.road,
+                        data?.address?.house_number,
+                        data?.address?.suburb || data?.address?.neighbourhood,
+                        data?.address?.city || data?.address?.town || data?.address?.village,
+                        
+                    ]
+                        .filter(Boolean)
+                        .join(' ');
+
+                setReverseGeocodedAddress(candidate || null);
+            } catch (geocodeError: any) {
+                if (!isCancelled) {
+                    console.error('Error al convertir coordenadas en dirección', geocodeError?.response?.data || geocodeError);
+                    setReverseGeocodedAddress(null);
+                }
+            }
+        };
+
+        fetchAddress();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [jobDetails?.changa?.direccion, coordinates?.latitude, coordinates?.longitude]);
+
     const isContractor = viewMode === 'contratante';
      const applicants = useMemo<PersonSummary[]>(() => {
         if (!jobDetails?.postulaciones) return [];
@@ -367,7 +448,7 @@ const JobDetailsScreen = () => {
     const requirements = extractRequirements(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
-    const locationText = formatLocation(changa);
+    const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
     const locationDetail = changa.estado ? `Estado: ${changa.estado}` : 'Disponibilidad sujeta a confirmación';
 
     const renderApplicantCard = (w: PersonSummary) => (
