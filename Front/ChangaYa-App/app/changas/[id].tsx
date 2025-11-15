@@ -8,7 +8,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
@@ -66,6 +66,7 @@ const DUMMY_JOB_DETAILS: JobDetails = {
 const JobDetailsScreen = () => {
     const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>();
     const { goToProfile } = useProfileNavigation();
+    const router = useRouter();
 
     const [jobDetails, setJobDetails] = useState<JobDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -219,31 +220,36 @@ const JobDetailsScreen = () => {
                     </View>
                 </View>
             </ScrollView>
-
                 <View style={styles.footer}>
-                    {isContractor ? (
-                        <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                            <TouchableOpacity style={[styles.actionButtonPrimary, { flex: 1 }]}>
-                                <Ionicons name="create-outline" size={20} color={palette.white} />
-                                <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.actionButtonSecondary, { flex: 1 }]}
-                                // Acá después conectás el cierre real con backend
-                                onPress={() => console.log("Cerrar changa")}
-                            >
-                                <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                                <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <TouchableOpacity style={styles.actionButtonPrimary}>
-                            <Ionicons name="hand-right-outline" size={20} color={palette.white} />
-                            <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                {isContractor ? (
+                    <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
+                        <TouchableOpacity 
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={() => 
+                                router.push({ 
+                                    pathname: "/changas/editar/[id]",
+                                    params: { id: jobDetails.id }
+                                })
+                            }
+                        >
+                            <Ionicons name="create-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Editar</Text>
                         </TouchableOpacity>
-                    )}
-                </View>
+                        <TouchableOpacity
+                            style={[styles.actionButtonSecondary, { flex: 1 }]}
+                            onPress={() => console.log("Cerrar changa")}
+                        >
+                            <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
+                            <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <TouchableOpacity style={styles.actionButtonPrimary}>
+                        <Ionicons name="hand-right-outline" size={20} color={palette.white} />
+                        <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
 
 
             {!isContractor && (
