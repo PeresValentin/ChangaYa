@@ -122,6 +122,16 @@ const quickLinks: {
 
   },
 ];
+const getNormalizedChangaId = (rawChanga: any) => {
+  const possibleId =
+    rawChanga?.id ??
+    rawChanga?.changaID ??
+    rawChanga?.changaId ??
+    rawChanga?.ChangaID ??
+    rawChanga?.ChangaId;
+
+  return possibleId ? String(possibleId) : undefined;
+};
 // =========================================================
 // COMPONENTE PRINCIPAL
 // =========================================================
@@ -194,7 +204,14 @@ export default function InicioContratanteScreen() {
           }
         );
 
-        setChangas(response.data); // el backend devuelve un array de changas
+        const responseData = Array.isArray(response.data) ? response.data : [];
+
+        const normalized = responseData.map((rawChanga: any) => ({
+          ...rawChanga,
+          id: getNormalizedChangaId(rawChanga),
+        }));
+
+        setChangas(normalized); // el backend devuelve un array de changas
       } catch (error: any) {
         console.error("Error al obtener changas del contratante:", error.response?.data || error.message);
         Alert.alert("Error", "No se pudieron cargar tus changas activas.");
@@ -278,12 +295,19 @@ export default function InicioContratanteScreen() {
                   <TouchableOpacity
                     key={changa.id || changa.changaID || Math.random().toString()}
                     style={styles.card}
-                    onPress={() =>
+                    onPress={() => {
+                      if (!changa.id) {
+                        Alert.alert(
+                          "No pudimos abrir esta changa",
+                          "Faltan datos para identificarla. Intentalo más tarde."
+                        );
+                        return;
+                      }
                       router.push({
                         pathname: "/changas/[id]",
                         params: { id: changa.id, viewMode: "contratante" },
-                      })
-                    }
+                      });
+                    }}
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardIconWrapper}>

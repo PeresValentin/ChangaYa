@@ -1,5 +1,5 @@
 {
-  "type" : "module",
+  "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
     "argon2": "^0.44.0",
