@@ -131,9 +131,135 @@ const extractRequirements = (changa: ApiChanga) => {
 
 };
 
+const parseDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatDateLabel = (date: Date, includeTime = false) => {
+    const datePart = new Intl.DateTimeFormat('es-AR', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    }).format(date);
+
+    if (!includeTime) {
+        return datePart;
+    }
+
+    const timePart = new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
+
+    return `${datePart} · ${timePart} hs`;
+};
+
+
 const formatSchedule = (startTime?: string, endTime?: string) => {
-    if (!startTime || !endTime) return 'Horario a coordinar';
-    return `${startTime} - ${endTime}`;
+   const startDate = parseDate(startTime);
+    const endDate = parseDate(endTime);
+
+    if (startDate && endDate) {
+        const sameDay = startDate.toDateString() === endDate.toDateString();
+        if (sameDay) {
+            const dayLabel = formatDateLabel(startDate, false);
+            const startLabel = new Intl.DateTimeFormat('es-AR', {
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(startDate);
+            const endLabel = new Intl.DateTimeFormat('es-AR', {
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(endDate);
+            return `${dayLabel} · ${startLabel} - ${endLabel} hs`;
+        }
+
+        return `${formatDateLabel(startDate, true)} - ${formatDateLabel(endDate, true)}`;
+    }
+
+    if (startDate) return formatDateLabel(startDate, true);
+    if (endDate) return formatDateLabel(endDate, true);
+
+    return 'Horario a coordinar';
+};
+
+type Coordinates = { latitude: number; longitude: number };
+
+const parsePointFromWKT = (value: string): Coordinates | null => {
+    const match = value.match(/POINT\s*\(\s*([-.\d]+)\s+([-.\d]+)\s*\)/i);
+    if (!match) return null;
+    const longitude = parseFloat(match[1]);
+    const latitude = parseFloat(match[2]);
+    return Number.isFinite(longitude) && Number.isFinite(latitude)
+        ? { latitude, longitude }
+        : null;
+};
+
+const parsePointFromEWKB = (value: string): Coordinates | null => {
+    const hex = value.replace(/[^0-9a-fA-F]/g, '');
+    if (!hex || hex.length % 2 !== 0) return null;
+
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+
+    if (bytes.length < 21) return null;
+
+    const dataView = new DataView(bytes.buffer);
+    const littleEndian = dataView.getUint8(0) === 1;
+    let offset = 1;
+    let type = dataView.getUint32(offset, littleEndian);
+    offset += 4;
+
+    const hasSRID = (type & 0x20000000) !== 0;
+    type = type & 0x000000FF;
+    if (type !== 1) return null;
+
+    if (hasSRID) {
+        if (bytes.length < offset + 4) return null;
+        offset += 4; // omitimos SRID
+    }
+
+    if (bytes.length < offset + 16) return null;
+
+    const longitude = dataView.getFloat64(offset, littleEndian);
+    const latitude = dataView.getFloat64(offset + 8, littleEndian);
+
+    return Number.isFinite(longitude) && Number.isFinite(latitude)
+        ? { latitude, longitude }
+        : null;
+};
+
+const parsePointCoordinates = (value?: string | null): Coordinates | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const plainMatch = trimmed.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
+    if (plainMatch) {
+        const latitude = parseFloat(plainMatch[1]);
+        const longitude = parseFloat(plainMatch[2]);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            return { latitude, longitude };
+        }
+    }
+    return parsePointFromWKT(trimmed) || parsePointFromEWKB(trimmed);
+};
+
+const formatLocation = (changa: ApiChanga) => {
+    if (changa.direccion?.trim()) {
+        return changa.direccion.trim();
+    }
+
+    const coordinates = parsePointCoordinates(changa.ubicacion);
+    if (coordinates) {
+        return `Lat ${coordinates.latitude.toFixed(4)}, Lon ${coordinates.longitude.toFixed(4)}`;
+    }
+
+    return 'Ubicación a coordinar';
 };
 
 const JobDetailsScreen = () => {
@@ -241,7 +367,7 @@ const JobDetailsScreen = () => {
     const requirements = extractRequirements(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
-    const locationText = changa.direccion || changa.ubicacion || 'Ubicación a coordinar';
+    const locationText = formatLocation(changa);
     const locationDetail = changa.estado ? `Estado: ${changa.estado}` : 'Disponibilidad sujeta a confirmación';
 
     const renderApplicantCard = (w: PersonSummary) => (
