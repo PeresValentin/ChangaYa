@@ -283,13 +283,6 @@ export default function InicioTrabajadorScreen() {
                           <Text style={styles.infoChipText}>${changa.remuneracion}</Text>
                         </View>
                       </View>
-
-                      {/* Footer */}
-                      <View style={styles.cardFooter}>
-                        <TouchableOpacity style={styles.cardAction}>
-                          <Text style={styles.cardActionText}>Ver detalles</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { usePathname, useRouter, type Href } from "expo-router";
-import { useState, useEffect } from "react";
+import { usePathname, useRouter, type Href, useFocusEffect } from "expo-router";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -187,8 +187,18 @@ export default function InicioContratanteScreen() {
     loadUserData();
   }, [API_URL]);
 
-  useEffect(() => {
+useFocusEffect(
+  useCallback(() => {
+    // La función fetchChangasByContratante ahora va DENTRO de useCallback
     const fetchChangasByContratante = async () => {
+      console.log("Pantalla 'Home' en foco, actualizando changas...");
+      // Nota: No pongo setLoading(true) aquí para que la recarga
+
+      // al volver sea sutil y no muestre el spinner si ya hay datos.
+
+      // Si preferís el spinner siempre, descomentá la línea de abajo:
+
+      // setLoading(true); 
       try {
         const token = await AsyncStorage.getItem("jwtToken");
         if (!token) {
@@ -196,32 +206,33 @@ export default function InicioContratanteScreen() {
           router.replace("/auth/login");
           return;
         }
-
         const response = await axios.get(
           `${API_URL}/api/changas/contratante`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-
         const responseData = Array.isArray(response.data) ? response.data : [];
-
         const normalized = responseData.map((rawChanga: any) => ({
           ...rawChanga,
           id: getNormalizedChangaId(rawChanga),
         }));
-
-        setChangas(normalized); // el backend devuelve un array de changas
+        setChangas(normalized);
       } catch (error: any) {
-        console.error("Error al obtener changas del contratante:", error.response?.data || error.message);
-        Alert.alert("Error", "No se pudieron cargar tus changas activas.");
+        console.error("Error al refrescar changas:", error.response?.data || error.message);
+        Alert.alert("Error", "No se pudieron refrescar tus changas.");
       } finally {
+        // Nos aseguramos de que el loading se oculte
         setLoading(false);
       }
     };
-
     fetchChangasByContratante();
-  }, []);
+    // Opcional: Función de limpieza que se ejecuta si salís de la pantalla
+    return () => {
+      // console.log("Saliendo de foco de Home");
+    };
+  }, [API_URL, router]) // Dependencias de useCallback
+);
 
   return (
     <SafeAreaView style={styles.safeArea}>

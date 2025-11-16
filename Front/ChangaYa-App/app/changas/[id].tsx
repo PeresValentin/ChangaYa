@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 
 import {
     SafeAreaView,
@@ -14,7 +14,6 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
-
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
@@ -295,7 +294,8 @@ const JobDetailsScreen = () => {
     const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>();
     const { goToProfile } = useProfileNavigation();
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
-    
+        const router = useRouter();
+
     const [jobDetails, setJobDetails] = useState<JobDetailsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -318,9 +318,21 @@ const JobDetailsScreen = () => {
                 setIsLoading(false);
                 return;
             }
-
-            const response = await axios.get<JobDetailsResponse>(`${API_URL}/api/changas/detalle/${id}`,
-                { headers: { Authorization: `Bearer ${token}` } });
+            const cacheBust = `_t=${new Date().getTime()}`;
+            
+            const response = await axios.get<JobDetailsResponse>(
+                `${API_URL}/api/changas/detalle/${id}`,
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        // Estas cabeceras le dicen a Axios y al servidor
+                        // que NO usen una respuesta en caché.
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                    } 
+                }
+            );
             setJobDetails(response.data);
         } catch (error: any) {
             console.error('Error al cargar la changa', error?.response?.data || error);
@@ -332,9 +344,21 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, id]);
 
-    useEffect(() => {
-        fetchJobDetails();
-    }, [fetchJobDetails]);
+useFocusEffect(
+  useCallback(() => {
+    // Esta función que le pasamos a useFocusEffect es síncrona
+    // y es lo que React espera.
+    
+    // Adentro, llamamos a nuestra función async
+    fetchJobDetails();
+
+    // Opcional: podés retornar una función de limpieza
+    return () => {
+      // console.log("Saliendo de foco de [id]");
+    };
+  }, [fetchJobDetails]) // La dependencia es la propia función 'fetchJobDetails'
+);
+
     useEffect(() => {
         if (!jobDetails?.changa) {
             setReverseGeocodedAddress(null);
@@ -676,31 +700,36 @@ const JobDetailsScreen = () => {
                     </View>
                 </View>
             </ScrollView>
-
                 <View style={styles.footer}>
-                    {isContractor ? (
-                        <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                            <TouchableOpacity style={[styles.actionButtonPrimary, { flex: 1 }]}>
-                                <Ionicons name="create-outline" size={20} color={palette.white} />
-                                <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.actionButtonSecondary, { flex: 1 }]}
-                                // Acá después conectás el cierre real con backend
-                                onPress={() => console.log("Cerrar changa")}
-                            >
-                                <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                                <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <TouchableOpacity style={styles.actionButtonPrimary}>
-                            <Ionicons name="hand-right-outline" size={20} color={palette.white} />
-                            <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                {isContractor ? (
+                    <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
+                        <TouchableOpacity 
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={() => 
+                                router.push({ 
+                                    pathname: "/changas/editar/[id]",
+                                    params: { id: jobDetails.changa.changaID }
+                                })
+                            }
+                        >
+                            <Ionicons name="create-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Editar</Text>
                         </TouchableOpacity>
-                    )}
-                </View>
+                        <TouchableOpacity
+                            style={[styles.actionButtonSecondary, { flex: 1 }]}
+                            onPress={() => console.log("Cerrar changa")}
+                        >
+                            <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
+                            <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <TouchableOpacity style={styles.actionButtonPrimary}>
+                        <Ionicons name="hand-right-outline" size={20} color={palette.white} />
+                        <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
 
 
             {!isContractor && (

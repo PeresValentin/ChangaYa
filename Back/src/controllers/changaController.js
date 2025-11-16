@@ -7,9 +7,9 @@ import { supabase } from '../config/supabaseClient.js'
 export const createChanga = async (req, res) => {
   try {
     const user = req.user  // viene del JWT
-    const { titulo, descripcion, remuneracion, horaInicio, horaFin } = req.body
+    const { titulo, descripcion, remuneracion, horaInicio, horaFin, ubicacion } = req.body
 
-    if (!titulo || !descripcion || !remuneracion) {
+    if (!titulo || !descripcion || !remuneracion || !ubicacion) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
     }
 
@@ -25,6 +25,7 @@ export const createChanga = async (req, res) => {
           remuneracion,
           horaInicio,
           horaFin,
+          ubicacion,
           estado: 'iniciada',
           [columnaRol]: user.id  // asignamos automáticamente el ID del JWT
         }
