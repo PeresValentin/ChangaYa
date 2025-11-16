@@ -2,9 +2,12 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -56,6 +59,14 @@ interface ApiChatDetalle {
 // =======================
 // Tipos Front
 // =======================
+
+type Attachment = {
+  type: 'audio';
+  uri?: string;
+  base64?: string;
+  durationMs?: number;
+};
+
 type Message = {
   id: string;
   text: string;
@@ -63,6 +74,7 @@ type Message = {
   createdAt: string;
   formattedTime: string;
   isPending?: boolean;
+  attachment?: Attachment | null;
 };
 type JwtPayload = {
   id?: string;
@@ -78,17 +90,72 @@ const formatTime = (date: string | number | Date) =>
     minute: '2-digit',
   });
 
+  const formatDuration = (ms?: number) => {
+  if (!ms || Number.isNaN(ms)) return '0:00';
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const parseAttachment = (raw?: string | null): Attachment | null => {
+  if (!raw) return null;
+
+  const fallbackFromDataUrl = () => {
+    if (raw.startsWith('data:audio')) {
+      const [, base64Content] = raw.split(',');
+      return {
+        type: 'audio',
+        base64: base64Content || raw,
+      } satisfies Attachment;
+    }
+    return null;
+  };
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.type === 'audio') {
+      if (typeof parsed.base64 === 'string') {
+        return {
+          type: 'audio',
+          base64: parsed.base64,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+
+      if (typeof parsed.uri === 'string') {
+        return {
+          type: 'audio',
+          uri: parsed.uri,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+    }
+  } catch {
+    return fallbackFromDataUrl();
+  }
+
+  if (raw.startsWith('http') || raw.startsWith('file:')) {
+    return { type: 'audio', uri: raw } satisfies Attachment;
+  }
+
+  return fallbackFromDataUrl();
+};
+
+
 // =======================
 // Helpers
 // =======================
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const AUDIO_PLACEHOLDER_TEXT = '[Audio]';
 
 const mapApiMessageToMessage = (m: ApiMensaje): Message => ({
   id: m.mensajeID,
-  text: m.contenido,
+  text: m.contenido || '',
   createdAt: m.fecha,
   formattedTime: formatTime(m.fecha),
   senderId: m.usuarioID,
+  attachment: parseAttachment(m.archivoAdjunto),
 });
 
 const getDisplayName = (u?: ApiChatUser | null) => {
@@ -109,6 +176,156 @@ const getInitials = (u?: ApiChatUser | null) => {
 };
 
 // =======================
+// Audio Attachment
+// =======================
+const AudioAttachment = ({
+  attachment,
+  isCurrentUser,
+}: {
+  attachment: Attachment & { type: 'audio' };
+  isCurrentUser: boolean;
+}) => {
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [playableUri, setPlayableUri] = useState<string | null>(attachment.uri ?? null);
+  const tempFileUriRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const cleanupTempFile = async () => {
+      if (tempFileUriRef.current) {
+        try {
+          await FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true });
+        } catch (error) {
+          console.warn('Error limpiando audio temporal:', error);
+        }
+        tempFileUriRef.current = null;
+      }
+    };
+
+    const stopExistingSound = async () => {
+      if (soundRef.current) {
+        try {
+          await soundRef.current.unloadAsync();
+        } catch (error) {
+          console.error('Error deteniendo audio:', error);
+        }
+        soundRef.current = null;
+        setIsPlaying(false);
+      }
+    };
+
+    const ensureUri = async () => {
+      if (attachment.uri) {
+        await stopExistingSound();
+        await cleanupTempFile();
+        if (isMounted) setPlayableUri(attachment.uri);
+        return;
+      }
+
+      if (!attachment.base64) return;
+
+      try {
+        await stopExistingSound();
+        await cleanupTempFile();
+        const tempUri = `${FileSystem.cacheDirectory}voice-${Date.now()}-${Math.random()}.m4a`;
+        await FileSystem.writeAsStringAsync(tempUri, attachment.base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        tempFileUriRef.current = tempUri;
+        if (isMounted) {
+          setPlayableUri(tempUri);
+        }
+      } catch (error) {
+        console.error('Error preparando audio:', error);
+      }
+    };
+
+    ensureUri();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [attachment.base64, attachment.uri]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      if (tempFileUriRef.current) {
+        FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true }).catch(() => {});
+        tempFileUriRef.current = null;
+      }
+    };
+  }, []);
+
+  const togglePlayback = useCallback(async () => {
+    if (!playableUri) return;
+
+    try {
+      if (!soundRef.current) {
+        setIsLoading(true);
+        const { sound: createdSound } = await Audio.Sound.createAsync({ uri: playableUri });
+        soundRef.current = createdSound;
+        createdSound.setOnPlaybackStatusUpdate((status) => {
+          if (!status.isLoaded) return;
+          setIsPlaying(status.isPlaying);
+          if (status.didJustFinish) {
+            createdSound.setPositionAsync(0);
+            setIsPlaying(false);
+          }
+        });
+        await createdSound.playAsync();
+        setIsPlaying(true);
+      } else {
+        const status = await soundRef.current.getStatusAsync();
+        if (!status.isLoaded) return;
+        if (status.isPlaying) {
+          await soundRef.current.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error reproduciendo audio:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [playableUri]);
+
+  return (
+    <View style={styles.audioBubble}>
+      <TouchableOpacity
+        style={[styles.audioPlayButton, (!playableUri || isLoading) && styles.audioButtonDisabled]}
+        onPress={togglePlayback}
+        disabled={!playableUri || isLoading}
+      >
+        <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="#fff" />
+      </TouchableOpacity>
+      <View style={styles.audioMeta}>
+        <Text style={[styles.audioLabel, isCurrentUser ? styles.textRight : styles.textLeft]}>
+          Nota de voz
+        </Text>
+        {attachment.durationMs ? (
+          <Text
+            style={[styles.audioDuration, isCurrentUser ? styles.textRight : styles.textLeft]}
+          >
+            {formatDuration(attachment.durationMs)}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+};
+
+
+// =======================
 // Burbuja de Mensaje
 // =======================
 const MessageBubble = ({
@@ -119,6 +336,12 @@ const MessageBubble = ({
   currentUserId: string | null;
 }) => {
   const isCurrentUser = currentUserId != null && message.senderId === currentUserId;
+  const audioAttachment = message.attachment?.type === 'audio' ? message.attachment : null;
+  const shouldShowText =
+    !!message.text &&
+    message.text.trim().length > 0 &&
+    (!audioAttachment || message.text !== AUDIO_PLACEHOLDER_TEXT);
+
 
   return (
     <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
@@ -128,14 +351,19 @@ const MessageBubble = ({
           isCurrentUser ? styles.bubbleRight : styles.bubbleLeft,
         ]}
       >
-        <Text
-          style={[
-            styles.messageText,
-            isCurrentUser ? styles.textRight : styles.textLeft,
-          ]}
-        >
-          {message.text}
-        </Text>
+        {audioAttachment ? (
+          <AudioAttachment attachment={audioAttachment} isCurrentUser={isCurrentUser} />
+        ) : null}
+        {shouldShowText ? (
+          <Text
+            style={[
+              styles.messageText,
+              isCurrentUser ? styles.textRight : styles.textLeft,
+            ]}
+          >
+            {message.text}
+          </Text>
+        ) : null}
       </View>
       <Text style={styles.timestamp}>
        {message.formattedTime} {isCurrentUser && !message.isPending && '✓✓'}
@@ -158,12 +386,21 @@ const ChatScreen = () => {
   const [details, setDetails] = useState<ApiChatDetalle | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-
+const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimeMs, setRecordingTimeMs] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isOtherOnline, setIsOtherOnline] = useState(false);
-
+   const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  }, []);
   const socketRef = useRef<Socket | null>(null);
   const lastTypingRef = useRef(false);
    const listRef = useRef<FlatList<Message> | null>(null);
@@ -210,7 +447,125 @@ const ChatScreen = () => {
     },
     [sortMessages]
   );
+   const sendAudioMessage = useCallback(
+    async (uri: string, durationMs?: number) => {
+      if (!socketRef.current || !id || !currentUserId) return;
 
+      try {
+        setIsSendingAudio(true);
+        const base64Audio = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const contenido = AUDIO_PLACEHOLDER_TEXT;
+        const attachmentPayload = {
+          type: 'audio',
+          mimeType: 'audio/m4a',
+          base64: base64Audio,
+          durationMs,
+        };
+
+        const optimisticMsg: Message = {
+          id: `temp-audio-${Date.now()}`,
+          text: contenido,
+          senderId: currentUserId,
+          createdAt: new Date().toISOString(),
+          formattedTime: formatTime(new Date()),
+          isPending: true,
+          attachment: {
+            type: 'audio',
+            uri,
+            durationMs,
+          },
+        };
+
+        setMessages((prev) => sortMessages([...prev, optimisticMsg]));
+
+        socketRef.current.emit('sendMessage', {
+          chatID: id,
+          contenido,
+          archivoAdjunto: JSON.stringify(attachmentPayload),
+        });
+      } catch (error) {
+        console.error('Error enviando audio:', error);
+      } finally {
+        setIsSendingAudio(false);
+      }
+    },
+    [currentUserId, id, sortMessages]
+  );
+
+  const startRecording = useCallback(async () => {
+    if (isRecording || isSendingAudio) return;
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permiso requerido',
+          'Necesitamos acceso al micrófono para poder grabar y enviar notas de voz.'
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      recordingRef.current = recording;
+      recordingStartTimeRef.current = Date.now();
+      setRecordingTimeMs(0);
+      setIsRecording(true);
+
+      clearRecordingTimer();
+      recordingIntervalRef.current = setInterval(() => {
+        if (recordingStartTimeRef.current) {
+          setRecordingTimeMs(Date.now() - recordingStartTimeRef.current);
+        }
+      }, 200);
+    } catch (error) {
+      console.error('Error iniciando grabación:', error);
+      setIsRecording(false);
+      clearRecordingTimer();
+    }
+  }, [clearRecordingTimer, isRecording, isSendingAudio]);
+
+  const stopRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      const durationMs = recordingStartTimeRef.current
+        ? Date.now() - recordingStartTimeRef.current
+        : recordingTimeMs;
+
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      if (uri) {
+        await sendAudioMessage(uri, durationMs);
+      }
+    } catch (error) {
+      console.error('Error deteniendo grabación:', error);
+    } finally {
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+    }
+  }, [clearRecordingTimer, recordingTimeMs, sendAudioMessage]);
 
   // =======================
   // 1) Cargar token, userID, chatDetails y mensajes iniciales
@@ -316,12 +671,12 @@ const ChatScreen = () => {
       setIsOtherTyping(false);
       setIsOtherOnline(false);
     };
-  }, [API_URL, currentUserId, id, mergeIncomingMessage, otherUser?.usuarioID, token]);
-
+ }, [currentUserId, id, mergeIncomingMessage, otherUser?.usuarioID, token]);
   // =======================
   // 3) Enviar mensaje
   // =======================
   const handleSend = () => {
+    if (isRecording || isSendingAudio) return;
     if (!newMessage.trim()) return;
     if (!socketRef.current || !id || !currentUserId) return;
 
@@ -369,6 +724,21 @@ const ChatScreen = () => {
     });
   }, [messages.length]);
 
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
+    };
+  }, []);
+
+
   const renderItem = useCallback(
     ({ item }: { item: Message }) => (
       <MessageBubble message={item} currentUserId={currentUserId} />
@@ -386,6 +756,7 @@ const ChatScreen = () => {
     : 'Desconectado';
 
    const headerDisplayName = getDisplayName(otherUser) || 'Chat';
+   const canSendText = newMessage.trim().length > 0 && !isRecording && !isSendingAudio;
 
   return (
     <KeyboardAvoidingView
@@ -445,17 +816,36 @@ const ChatScreen = () => {
 
       {/* INPUT */}
       <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="mic-outline" size={24} color="#555" />
+         <TouchableOpacity
+          style={[styles.iconButton, (isRecording || isSendingAudio) && styles.iconButtonActive]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isSendingAudio}
+        >
+          <Ionicons
+            name={isRecording ? 'stop' : 'mic-outline'}
+            size={24}
+            color={isRecording ? '#b91c1c' : '#555'}
+          />
         </TouchableOpacity>
+        {isRecording ? (
+          <Text style={styles.recordTimer}>{formatDuration(recordingTimeMs)}</Text>
+        ) : isSendingAudio ? (
+          <Text style={styles.uploadingAudioText}>Enviando audio...</Text>
+        ) : null}
+
         <TextInput
           style={styles.textInput}
           placeholder="Escribe un mensaje..."
           value={newMessage}
           onChangeText={handleChangeText}
           multiline
+          editable={!isRecording}
         />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+        <TouchableOpacity
+          style={[styles.sendButton, !canSendText && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={!canSendText}
+        >
           <Ionicons name="send" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -552,6 +942,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         borderRadius: 20,
         marginBottom: 2,
+        gap: 6,
     },
     bubbleLeft: {
         backgroundColor: '#E6E6E6',
@@ -589,6 +980,50 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
 
+    iconButtonActive: {
+        backgroundColor: '#FEE2E2',
+        borderRadius: 20,
+    },
+       sendButtonDisabled: {
+        opacity: 0.4,
+    },
+    recordTimer: {
+        color: '#b91c1c',
+        fontWeight: 'bold',
+        marginHorizontal: 8,
+        minWidth: 48,
+        textAlign: 'center',
+    },
+    uploadingAudioText: {
+        color: '#6B7280',
+        fontSize: 12,
+        marginHorizontal: 8,
+    },
+    audioBubble: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    audioPlayButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#34A853',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    audioButtonDisabled: {
+        opacity: 0.5,
+    },
+    audioMeta: {
+        flex: 1,
+    },
+    audioLabel: {
+        fontWeight: '600',
+    },
+    audioDuration: {
+        fontSize: 12,
+    },
     // ===== CHANGA CARD =====
     changaCard: {
         flexDirection: 'row',
