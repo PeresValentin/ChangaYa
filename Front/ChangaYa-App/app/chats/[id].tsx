@@ -2,7 +2,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -22,8 +22,7 @@ import { jwtDecode } from 'jwt-decode';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
-const { FONT, SPACING, RADIUS } = theme;
-const palette = theme.Colors.light;
+const { SPACING } = theme;
 
 // =======================
 // Tipos API
@@ -60,10 +59,11 @@ interface ApiChatDetalle {
 type Message = {
   id: string;
   text: string;
-  time: string;
   senderId: string;
+  createdAt: string;
+  formattedTime: string;
+  isPending?: boolean;
 };
-
 type JwtPayload = {
   id?: string;
   usuarioID?: string;
@@ -71,6 +71,12 @@ type JwtPayload = {
   email?: string;
   rol?: string;
 };
+
+const formatTime = (date: string | number | Date) =>
+  new Date(date).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 // =======================
 // Helpers
@@ -80,10 +86,8 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const mapApiMessageToMessage = (m: ApiMensaje): Message => ({
   id: m.mensajeID,
   text: m.contenido,
-  time: new Date(m.fecha).toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
+  createdAt: m.fecha,
+  formattedTime: formatTime(m.fecha),
   senderId: m.usuarioID,
 });
 
@@ -97,7 +101,10 @@ const getInitials = (u?: ApiChatUser | null) => {
   const name = getDisplayName(u);
   if (!name) return '?';
   const parts = name.split(' ').filter(Boolean);
-  const initials = parts.slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+  const initials = parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
   return initials || name[0]?.toUpperCase() || '?';
 };
 
@@ -131,26 +138,12 @@ const MessageBubble = ({
         </Text>
       </View>
       <Text style={styles.timestamp}>
-        {message.time} {isCurrentUser && '✓✓'}
+       {message.formattedTime} {isCurrentUser && !message.isPending && '✓✓'}
       </Text>
     </View>
   );
 };
 
-// =======================
-// Tarjeta de Changa (placeholder)
-// =======================
-const RelatedChangaCard = () => (
-  <View style={styles.changaCard}>
-    <View style={styles.changaIcon}>
-      <Ionicons name="build-outline" size={24} color="#34A853" />
-    </View>
-    <View style={styles.changaDetails}>
-      <Text style={styles.changaTitle}>Changa relacionada</Text>
-      <Text style={styles.changaInfo}>Vinculá acá la changa real luego</Text>
-    </View>
-  </View>
-);
 
 // =======================
 // Pantalla principal
@@ -173,6 +166,7 @@ const ChatScreen = () => {
 
   const socketRef = useRef<Socket | null>(null);
   const lastTypingRef = useRef(false);
+   const listRef = useRef<FlatList<Message> | null>(null);
 
   // ---- Derivar el otro usuario del chat ----
   const otherUser: ApiChatUser | null = useMemo(() => {
@@ -181,6 +175,42 @@ const ChatScreen = () => {
       ? details.usuario2
       : details.usuario1;
   }, [details, currentUserId]);
+
+  const sortMessages = useCallback((items: Message[]) => {
+    return items.slice().sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, []);
+
+  const mergeIncomingMessage = useCallback(
+    (incoming: Message) => {
+      setMessages((prev) => {
+        const withoutOptimistic = prev.filter(
+          (msg) =>
+            !(
+              msg.isPending &&
+              msg.senderId === incoming.senderId &&
+              msg.text === incoming.text
+            )
+        );
+
+        const existingIndex = withoutOptimistic.findIndex(
+          (msg) => msg.id === incoming.id
+        );
+
+        if (existingIndex !== -1) {
+          const updated = [...withoutOptimistic];
+          updated[existingIndex] = { ...incoming };
+          return sortMessages(updated);
+        }
+
+        return sortMessages([...withoutOptimistic, incoming]);
+      });
+    },
+    [sortMessages]
+  );
+
 
   // =======================
   // 1) Cargar token, userID, chatDetails y mensajes iniciales
@@ -221,12 +251,11 @@ const ChatScreen = () => {
         );
 
         const mapped = msgRes.data
-          .slice()
+          .map(mapApiMessageToMessage)
           .sort(
             (a, b) =>
-              new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-          )
-          .map(mapApiMessageToMessage);
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
 
         setMessages(mapped);
       } catch (err) {
@@ -257,26 +286,25 @@ const ChatScreen = () => {
     // Nuevo mensaje recibido
     socket.on('nuevoMensaje', (apiMsg: ApiMensaje) => {
       if (apiMsg.chatID !== id) return;
-      setMessages((prev) => [mapApiMessageToMessage(apiMsg), ...prev]);
+      mergeIncomingMessage(mapApiMessageToMessage(apiMsg));
     });
 
     // Indicador escribiendo...
     socket.on('typing', ({ userID, isTyping }) => {
-      if (!otherUser) return;
-      if (userID === otherUser.usuarioID) {
+     if (userID === otherUser?.usuarioID) {
         setIsOtherTyping(!!isTyping);
       }
     });
 
     // Presencia básica
     socket.on('userOnline', ({ userID }) => {
-      if (otherUser && userID === otherUser.usuarioID) {
+       if (userID === otherUser?.usuarioID) {
         setIsOtherOnline(true);
       }
     });
 
     socket.on('userOffline', ({ userID }) => {
-      if (otherUser && userID === otherUser.usuarioID) {
+      if (userID === otherUser?.usuarioID) {
         setIsOtherOnline(false);
       }
     });
@@ -285,8 +313,10 @@ const ChatScreen = () => {
       socket.emit('leaveChat', { chatID: id, userID: currentUserId });
       socket.disconnect();
       socketRef.current = null;
+      setIsOtherTyping(false);
+      setIsOtherOnline(false);
     };
-  }, [id, currentUserId, token, otherUser?.usuarioID]);
+  }, [API_URL, currentUserId, id, mergeIncomingMessage, otherUser?.usuarioID, token]);
 
   // =======================
   // 3) Enviar mensaje
@@ -302,14 +332,13 @@ const ChatScreen = () => {
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
       text: contenido,
-      time: new Date().toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
       senderId: currentUserId,
+      createdAt: new Date().toISOString(),
+      formattedTime: formatTime(new Date()),
+      isPending: true,
     };
 
-    setMessages((prev) => [optimisticMsg, ...prev]);
+    setMessages((prev) => sortMessages([...prev, optimisticMsg]));
 
     socketRef.current.emit('sendMessage', {
       chatID: id,
@@ -333,6 +362,20 @@ const ChatScreen = () => {
     }
   };
 
+  useEffect(() => {
+    if (!messages.length) return;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [messages.length]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: Message }) => (
+      <MessageBubble message={item} currentUserId={currentUserId} />
+    ),
+    [currentUserId]
+  );
+
   // =======================
   // 5) Render
   // =======================
@@ -341,6 +384,8 @@ const ChatScreen = () => {
     : isOtherOnline
     ? 'En línea'
     : 'Desconectado';
+
+   const headerDisplayName = getDisplayName(otherUser) || 'Chat';
 
   return (
     <KeyboardAvoidingView
@@ -359,9 +404,7 @@ const ChatScreen = () => {
                 </Text>
               </View>
               <View>
-                <Text style={styles.headerTitle}>
-                  {getDisplayName(otherUser) || 'Chat'}
-                </Text>
+                 <Text style={styles.headerTitle}>{headerDisplayName}</Text>
                 <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
               </View>
             </View>
@@ -383,14 +426,16 @@ const ChatScreen = () => {
 
       {/* LISTA DE MENSAJES */}
       <FlatList
+        ref={listRef}
         data={messages}
-        renderItem={({ item }) => (
-          <MessageBubble message={item} currentUserId={currentUserId} />
-        )}
+        renderItem={renderItem}
         keyExtractor={(item) => item.id}
         style={styles.messageList}
-        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 10 }}
-        inverted
+        contentContainerStyle={{
+          paddingHorizontal: 10,
+          paddingVertical: 10,
+        }}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           !loading ? (
             <View style={{ padding: SPACING.lg }}>
@@ -400,8 +445,8 @@ const ChatScreen = () => {
         }
       />
 
-      {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
-      {/* <RelatedChangaCard />
+       {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
+      {/* <RelatedChangaCard /> */}
 
       {/* INPUT */}
       <View style={styles.inputContainer}>
