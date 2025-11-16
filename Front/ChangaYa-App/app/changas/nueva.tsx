@@ -65,7 +65,7 @@ const CrearChangaScreen = () => {
     // TODO: Implementar lógica para publicar la changa
     const handlePublish = async () => {
         // Validaciones básicas
-        if (!titulo || !descripcion || !precio) {
+        if (!titulo || !descripcion || !precio || !ubicacion.trim()) {
             Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
             return;
         }
@@ -79,17 +79,34 @@ const CrearChangaScreen = () => {
             return;
             }
 
-            // Construir el payload
-            const nuevaChanga = {
-            titulo,
-            descripcion,
-            remuneracion: parseFloat(precio),
-            horaInicio: new Date().toISOString(), // Podés ajustarlo con tus campos de fecha/hora reales
-            horaFin: new Date().toISOString(),
-            };
+            // Convertir dirección en coordenadas antes de enviar
+const geo = await axios.get("https://nominatim.openstreetmap.org/search", {
+    params: {
+        q: ubicacion,
+        format: "json",
+        limit: 1
+    }
+});
 
-            console.log("Enviando changa:", nuevaChanga);
+if (!geo.data.length) {
+    Alert.alert("Ubicación inválida", "No pudimos encontrar esa dirección.");
+    return;
+}
 
+const lat = geo.data[0].lat;
+const lon = geo.data[0].lon;
+
+// Construir payload listo para PostGIS
+const nuevaChanga = {
+    titulo,
+    descripcion,
+    remuneracion: parseFloat(precio),
+    horaInicio: new Date().toISOString(),
+    horaFin: new Date().toISOString(),
+    ubicacion: `POINT(${lon} ${lat})`, // ← AHORA SÍ
+};
+
+console.log("Enviando changa:", nuevaChanga);
             // Hacer la petición POST
             const response = await axios.post(
             `${API_URL}/api/changas`,
