@@ -7,9 +7,9 @@ import { supabase } from '../config/supabaseClient.js'
 export const createChanga = async (req, res) => {
   try {
     const user = req.user  // viene del JWT
-    const { titulo, descripcion, remuneracion, horaInicio, horaFin } = req.body
+    const { titulo, descripcion, remuneracion, horaInicio, horaFin, ubicacion } = req.body
 
-    if (!titulo || !descripcion || !remuneracion) {
+    if (!titulo || !descripcion || !remuneracion || !ubicacion) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
     }
 
@@ -25,6 +25,7 @@ export const createChanga = async (req, res) => {
           remuneracion,
           horaInicio,
           horaFin,
+          ubicacion,
           estado: 'iniciada',
           [columnaRol]: user.id  // asignamos automáticamente el ID del JWT
         }
@@ -161,5 +162,87 @@ export const deleteChanga = async (req, res) => {
     res.status(200).json({ message: 'Changa eliminada correctamente' })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+}
+
+/**
+ * Obtener detalle de una changa dependiendo del rol del usuario
+ * - Admin / contratante → changa + postulaciones + datos de postulantes
+ * - Trabajador → changa + datos del contratante
+ */
+export const getChangaDetalle = async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user  // { id, rol }
+
+    // 1) Buscar changa
+    const { data: changa, error: changaError } = await supabase
+      .from('Changa')
+      .select('*')
+      .eq('changaID', id)
+      .single()
+
+    if (changaError) throw changaError
+    if (!changa) return res.status(404).json({ error: 'Changa no encontrada' })
+
+    // ================================================================
+    // A) CASO ADMIN O CONTRATANTE → retornar postulaciones completas
+    // ================================================================
+    if (user.rol === 'admin' || user.rol === 'contratante') {
+
+      // Obtener postulaciones + datos de cada usuario postulante
+      const { data: postulaciones, error: postError } = await supabase
+        .from('Postulacion')
+        .select(`
+          *,
+          usuario:usuarioID (
+            usuarioID,
+            nombreUsuario,
+            nombre,
+            apellido,
+            email,
+            telefono,
+            rankingGeneral,
+            tipoUsuario
+          )
+        `)
+        .eq('changaID', id)
+
+      if (postError) throw postError
+
+      return res.status(200).json({
+        changa,
+        postulaciones
+      })
+    }
+
+    // ================================================================
+    // B) CASO TRABAJADOR → retornar contratante asociado
+    // ================================================================
+    if (user.rol === 'trabajador') {
+
+      // Obtener info del contratante
+      const { data: contratante, error: contError } = await supabase
+        .from('Usuario')
+        .select('usuarioID, nombreUsuario, nombre, apellido, email, telefono, rankingGeneral')
+        .eq('usuarioID', changa.contratanteID)
+        .single()
+
+      if (contError) throw contError
+
+      return res.status(200).json({
+        changa,
+        contratante
+      })
+    }
+
+    // ================================================================
+    // Si no matchea ningún rol conocido
+    // ================================================================
+    return res.status(403).json({ error: 'Rol no autorizado' })
+
+  } catch (err) {
+    console.error('❌ Error en getChangaDetalle:', err)
+    return res.status(500).json({ error: err.message })
   }
 }

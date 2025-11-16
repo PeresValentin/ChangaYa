@@ -28,16 +28,24 @@ import usuarioRoutes from "./src/routes/usuarioRoutes.js";
 import changaRoutes from "./src/routes/changaRoutes.js";
 import postulacionRoutes from "./src/routes/postulacionRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
+import habilidadRoutes from './src/routes/habilidadRoutes.js'
+import reseniaRoutes from './src/routes/reseniaRoutes.js' 
+import reseniaHabilidadRoutes from './src/routes/reseniaHabilidadRoutes.js'
+import perfilRoutes from './src/routes/perfilRoutes.js'
 
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/changas", changaRoutes);
 app.use("/api/postulaciones", postulacionRoutes);
 app.use("/api/chats", chatRoutes);
+app.use('/api/habilidad', habilidadRoutes)
+app.use('/api/resenia', reseniaRoutes)
+app.use('/api/reseniaHabilidad', reseniaHabilidadRoutes)
+app.use('/api/perfil', perfilRoutes)
 
 // Puerto
 const PORT = process.env.PORT || 3000;
 
-// 🚀 IMPORTANTE → SOLO SE USA server.listen()
+// IMPORTANTE → SOLO SE USA server.listen()
 server.listen(PORT, () => {
   console.log(`Servidor escuchando en puerto ${PORT}`);
 });

@@ -197,14 +197,14 @@ export default function RegisterScreen() {
           <View style={styles.row}>
             <TextInput
               value={name}
-              onChangeText={(t) => setName(t.toLowerCase())}
+              onChangeText={(t) => setName(t)}
               placeholder="Nombre"
               style={styles.input}
               placeholderTextColor={palette.muted}
             />
             <TextInput
               value={lastname}
-              onChangeText={(t) => setLastname(t.toLowerCase())}
+              onChangeText={(t) => setLastname(t)}
               placeholder="Apellido"
               style={styles.input}
               placeholderTextColor={palette.muted}

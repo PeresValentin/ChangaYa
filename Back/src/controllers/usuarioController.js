@@ -94,17 +94,16 @@ export const createUsuario = async (req, res) => {
   }
 }
 
-// Verificar email y crear usuario real
 export const verificarUsuario = async (req, res) => {
   try {
     const { token } = req.query
     if (!token) return res.status(400).json({ error: 'Falta el token de verificación' })
 
-    // Verificar el token (expira a los 30 minutos)
+    // Verificar token de 30 minutos
     const decoded = jwt.verify(token, JWT_EMAIL_SECRET)
 
-    // Insertar usuario real en Supabase
-    const { data, error } = await supabase
+    // Crear usuario definitivo
+    const { data: usuarioInsertado, error } = await supabase
       .from('Usuario')
       .insert([{
         nombreUsuario: decoded.nombreUsuario,
@@ -120,7 +119,37 @@ export const verificarUsuario = async (req, res) => {
 
     if (error) throw error
 
-    res.status(201).json({ message: 'Cuenta verificada y creada correctamente' })
+    const nuevoUsuario = usuarioInsertado[0]
+
+    /* ---------------------------------------------
+       🟢 CREAR PERFIL AUTOMÁTICO PARA EL USUARIO
+       --------------------------------------------- */
+
+    const descripcionPlaceholder = `
+      ¡Hola! Soy ${nuevoUsuario.nombre} ${nuevoUsuario.apellido}.
+      Este es mi perfil de usuario en ChangaYa.
+      Pronto voy a completarlo con más información 😊
+    `.trim()
+
+    const { error: perfilError } = await supabase
+      .from('Perfil')
+      .insert([{
+        usuarioID: nuevoUsuario.usuarioID,
+        descripcion: descripcionPlaceholder,
+        foto: null  // todavía no tiene foto
+      }])
+
+    if (perfilError) {
+      console.error("❌ Error creando perfil automático:", perfilError.message)
+      // no tiramos error porque el usuario ya fue creado
+    }
+
+    // Respuesta final
+    res.status(201).json({
+      message: 'Cuenta verificada y creada correctamente',
+      usuarioID: nuevoUsuario.usuarioID
+    })
+
   } catch (err) {
     console.error('❌ Error en verificación:', err)
     res.status(400).json({ error: err.message })

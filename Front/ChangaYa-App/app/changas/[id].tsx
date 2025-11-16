@@ -1,108 +1,516 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+
 import {
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
+
+interface ApiUser {
+    usuarioID?: string;
+    nombre?: string;
+    apellido?: string;
+    nombreUsuario?: string;
+    email?: string;
+    telefono?: string;
+    rankingGeneral?: number | null;
+    created_at?: string;
+}
+
+interface ApiPostulacion {
+    postulacionID?: string;
+    usuarioID?: string;
+    usuario?: ApiUser;
+}
+
+interface ApiChanga {
+    changaID: string;
+    titulo?: string;
+    descripcion?: string;
+    remuneracion?: number | string;
+    horaInicio?: string;
+    horaFin?: string;
+    estado?: string;
+    direccion?: string;
+    ubicacion?: string;
+    trabajadores?: string[];
+    contratanteID?: string | null;
+    // TODO: agregar habilidades/localización detallada cuando el backend lo provea
+    habilidades?: string | string[] | null;
+}
+
+interface JobDetailsResponse {
+    changa: ApiChanga;
+    contratante?: ApiUser;
+    postulaciones?: ApiPostulacion[];
+}
+
+interface NominatimReverseResponse {
+    display_name?: string;
+    address?: {
+        road?: string;
+        house_number?: string;
+        neighbourhood?: string;
+        suburb?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+         hamlet?: string;
+        quarter?: string;
+    };
+}
+
 interface PersonSummary {
     id: string;
     initials: string;
     name: string;
-    rating: number;
-    reviews: number;
-    memberSince: string;
+    rating?: number | null;
+    reviews?: number | null;
+    memberSince?: string;
+    email?: string;
+    phone?: string;
 }
+const sanitizeName = (value?: string | null) => (value ?? '').trim();
 
-interface JobDetails {
-    id: string;
-    title: string;
-    urgent: boolean;
-    price: string;
-    distance: string;
-    schedule: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    description: string;
-    requirements: string[];
-    contractor: PersonSummary;
-    assignedWorker?: PersonSummary;
-    applicants: PersonSummary[];
-    location: {
-        address: string;
-        walkingTime: string;
+const buildDisplayName = (userLike?: ApiUser | null) => {
+    if (!userLike) return '';
+
+    const first = sanitizeName(userLike?.nombre);
+    const last = sanitizeName(userLike?.apellido);
+    const fullname = [first, last].filter(Boolean).join(' ').trim();
+    const username = sanitizeName(userLike?.nombreUsuario);
+
+    // PRIORIDAD:
+    // 1. nombre + apellido
+    if (fullname) return fullname;
+
+    // 2. solo nombre
+    if (first) return first;
+
+    // 3. username
+    if (username) return username;
+
+    return '';
+};
+
+
+const buildInitials = (name: string) => {
+    if (!name) return '?';
+    const initials = name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('');
+    return initials || name.charAt(0).toUpperCase() || '?';
+};
+
+const toPersonSummary = (userLike?: ApiUser | null): PersonSummary | null => {
+    if (!userLike) return null;
+    const name = buildDisplayName(userLike) || 'Usuario';
+    return {
+        id: String(userLike.usuarioID || ''),
+        initials: buildInitials(name),
+        name,
+        rating: typeof userLike.rankingGeneral === 'number' ? userLike.rankingGeneral : null,
+        reviews: null,
+        memberSince: userLike.created_at
+            ? new Date(userLike.created_at).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+            : undefined,
+        email: userLike.email || undefined,
+        phone: userLike.telefono || undefined,
+
     };
-}
 
-const DUMMY_JOB_DETAILS: JobDetails = {
-    id: 'plomero-urgente',
-    title: 'Plomero Urgente',
-    urgent: true,
-    price: '$15.000',
-    distance: 'A 0.5 km de tu ubicación',
-    schedule: 'Necesario hoy',
-    icon: 'build-outline',
-    description: 'Se rompió la canilla del baño...',
-    requirements: ['Experiencia en plomería', 'Disponibilidad inmediata', 'Herramientas propias'],
-    contractor: { id: 'c1', initials: 'CP', name: 'Carlos Pérez', rating: 4.7, reviews: 24, memberSince: 'enero 2022' },
-    assignedWorker: { id: 'w1', initials: 'MR', name: 'María Rodríguez', rating: 4.8, reviews: 32, memberSince: 'marzo 2023' },
-    applicants: [
-        { id: 'w1', initials: 'MR', name: 'María Rodríguez', rating: 4.8, reviews: 32, memberSince: 'marzo 2023' },
-        { id: 'w2', initials: 'JG', name: 'Jorge Gómez', rating: 4.5, reviews: 18, memberSince: 'junio 2021' },
-        { id: 'w3', initials: 'AL', name: 'Ana López', rating: 4.9, reviews: 40, memberSince: 'febrero 2020' }
-    ],
-    location: { address: 'Calle 50 y 15, La Plata', walkingTime: '6 minutos caminando' },
+};
+
+const formatCurrency = (value?: number | string | null) => {
+    if (value === null || value === undefined) return 'Sin definir';
+    if (typeof value === 'number') {
+        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value);
+    }
+    return String(value);
+};
+
+const extractHabilities = (changa: ApiChanga) => {
+    if (!changa.habilidades) return [];
+    if (Array.isArray(changa.habilidades)) return changa.habilidades;
+    // TODO: reemplazar este split cuando el backend envíe un array normalizado
+    return changa.habilidades.split(',').map((req) => req.trim()).filter(Boolean);
+
+
+};
+
+const parseDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatDateLabel = (date: Date, includeTime = false) => {
+    const datePart = new Intl.DateTimeFormat('es-AR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+    })
+        .format(date)
+        .replace(/,\s*/g, ' ');
+
+    if (!includeTime) {
+        return datePart;
+    }
+
+    const timePart = new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(date);
+
+    return `${datePart} · ${timePart} hs`;
+};
+
+
+const formatSchedule = (startTime?: string, endTime?: string) => {
+   const startDate = parseDate(startTime);
+    const endDate = parseDate(endTime);
+
+    if (startDate && endDate) {
+        const sameDay = startDate.toDateString() === endDate.toDateString();
+        if (startDate) {
+        return formatDateLabel(startDate, true);
+        }
+
+        return `${formatDateLabel(startDate, true)} - ${formatDateLabel(endDate, true)}`;
+    }
+
+    
+    if (endDate) {
+        return formatDateLabel(endDate, true);
+    }
+
+    return 'Horario a coordinar';
+};
+
+type Coordinates = { latitude: number; longitude: number };
+
+const parsePointFromWKT = (value: string): Coordinates | null => {
+    const match = value.match(/POINT\s*\(\s*([-.\d]+)\s+([-.\d]+)\s*\)/i);
+    if (!match) return null;
+    const longitude = parseFloat(match[1]);
+    const latitude = parseFloat(match[2]);
+    return Number.isFinite(longitude) && Number.isFinite(latitude)
+        ? { latitude, longitude }
+        : null;
+};
+
+const parsePointFromEWKB = (value: string): Coordinates | null => {
+    const hex = value.replace(/[^0-9a-fA-F]/g, '');
+    if (!hex || hex.length % 2 !== 0) return null;
+
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+
+    if (bytes.length < 21) return null;
+
+    const dataView = new DataView(bytes.buffer);
+    const littleEndian = dataView.getUint8(0) === 1;
+    let offset = 1;
+    let type = dataView.getUint32(offset, littleEndian);
+    offset += 4;
+
+    const hasSRID = (type & 0x20000000) !== 0;
+    type = type & 0x000000FF;
+    if (type !== 1) return null;
+
+    if (hasSRID) {
+        if (bytes.length < offset + 4) return null;
+        offset += 4; // omitimos SRID
+    }
+
+    if (bytes.length < offset + 16) return null;
+
+    const longitude = dataView.getFloat64(offset, littleEndian);
+    const latitude = dataView.getFloat64(offset + 8, littleEndian);
+
+    return Number.isFinite(longitude) && Number.isFinite(latitude)
+        ? { latitude, longitude }
+        : null;
+};
+
+const parsePointCoordinates = (value?: string | null): Coordinates | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const plainMatch = trimmed.match(/(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/);
+    if (plainMatch) {
+        const latitude = parseFloat(plainMatch[1]);
+        const longitude = parseFloat(plainMatch[2]);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            return { latitude, longitude };
+        }
+    }
+    return parsePointFromWKT(trimmed) || parsePointFromEWKB(trimmed);
+};
+
+const formatLocation = (
+    changa: ApiChanga,
+    reverseAddress?: string | null,
+    coordinates?: Coordinates | null,
+) => {
+    const trimmedAddress = changa.direccion?.trim();
+    if (trimmedAddress) {
+        return trimmedAddress;
+    }
+
+    if (reverseAddress?.trim()) {
+        return reverseAddress.trim();
+    }
+
+   
+    if (coordinates) {
+        return `Lat ${coordinates.latitude.toFixed(4)}, Lon ${coordinates.longitude.toFixed(4)}`;
+    }
+
+    return 'Ubicación a coordinar';
 };
 
 const JobDetailsScreen = () => {
     const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>();
     const { goToProfile } = useProfileNavigation();
+    const API_URL = process.env.EXPO_PUBLIC_API_URL;
+        const router = useRouter();
 
-    const [jobDetails, setJobDetails] = useState<JobDetails | null>(null);
+    const [jobDetails, setJobDetails] = useState<JobDetailsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [reverseGeocodedAddress, setReverseGeocodedAddress] = useState<string | null>(null);
+
+    const coordinates = useMemo(() => parsePointCoordinates(jobDetails?.changa?.ubicacion), [jobDetails?.changa?.ubicacion]);
+    const fetchJobDetails = useCallback(async () => {
+        if (!id) {
+            setErrorMessage('No se encontró el identificador de la changa.');
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            setErrorMessage(null);
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) {
+                setErrorMessage('Tu sesión expiró. Iniciá sesión nuevamente.');
+                setIsLoading(false);
+                return;
+            }
+            const cacheBust = `_t=${new Date().getTime()}`;
+            
+            const response = await axios.get<JobDetailsResponse>(
+                `${API_URL}/api/changas/detalle/${id}`,
+                { 
+                    headers: { 
+                        Authorization: `Bearer ${token}`,
+                        // Estas cabeceras le dicen a Axios y al servidor
+                        // que NO usen una respuesta en caché.
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                    } 
+                }
+            );
+            setJobDetails(response.data);
+        } catch (error: any) {
+            console.error('Error al cargar la changa', error?.response?.data || error);
+            const backendMessage = error?.response?.data?.error || 'Ocurrió un error al obtener la changa.';
+            setErrorMessage(backendMessage);
+            Alert.alert('Error', backendMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [API_URL, id]);
+
+useFocusEffect(
+  useCallback(() => {
+    // Esta función que le pasamos a useFocusEffect es síncrona
+    // y es lo que React espera.
+    
+    // Adentro, llamamos a nuestra función async
+    fetchJobDetails();
+
+    // Opcional: podés retornar una función de limpieza
+    return () => {
+      // console.log("Saliendo de foco de [id]");
+    };
+  }, [fetchJobDetails]) // La dependencia es la propia función 'fetchJobDetails'
+);
 
     useEffect(() => {
-        setIsLoading(true);
-        setTimeout(() => {
-            setJobDetails(DUMMY_JOB_DETAILS);
-            setIsLoading(false);
-        }, 300);
-    }, [id]);
+        if (!jobDetails?.changa) {
+            setReverseGeocodedAddress(null);
+            return;
+        }
 
-    if (isLoading) return <SafeAreaView style={styles.safeArea}><Text>Cargando...</Text></SafeAreaView>;
-    if (!jobDetails) return <SafeAreaView style={styles.safeArea}><Text>No se encontraron detalles.</Text></SafeAreaView>;
+        const trimmedAddress = jobDetails.changa.direccion?.trim();
+        if (trimmedAddress || !coordinates) {
+            setReverseGeocodedAddress(null);
+            return;
+        }
+
+        let isCancelled = false;
+
+        const fetchAddress = async () => {
+            setReverseGeocodedAddress(null);
+
+            try {
+                const response = await axios.get<NominatimReverseResponse>('https://nominatim.openstreetmap.org/reverse', {
+                    params: {
+                        format: 'jsonv2',
+                        lat: coordinates.latitude,
+                        lon: coordinates.longitude,
+                        zoom: 18,
+                        addressdetails: 1,
+                    },
+                    headers: {
+                        'Accept-Language': 'es-AR',
+                        'User-Agent': 'ChangaYaApp/1.0 (https://changaya.app/soporte)',
+                    },
+                    timeout: 8000,
+                });
+
+                if (isCancelled) return;
+
+                const data = response.data;
+                const address = data?.address || {};
+                const streetLine = [address.road, address.house_number]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim();
+                const areaLine = address.suburb || address.neighbourhood || address.quarter || '';
+                const cityLine = address.city || address.town || address.village || address.hamlet || '';
+                const candidate = [streetLine || null, areaLine || null, cityLine || null]
+                    .filter(Boolean)
+                    .join(', ')
+                    .trim()
+                    || streetLine
+                    || data?.display_name
+                    || null;
+
+                setReverseGeocodedAddress(candidate || null);
+            } catch (geocodeError: any) {
+                if (!isCancelled) {
+                    console.error('Error al convertir coordenadas en dirección', geocodeError?.response?.data || geocodeError);
+                    setReverseGeocodedAddress(null);
+                }
+            }
+        };
+
+        fetchAddress();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [jobDetails?.changa?.direccion, coordinates?.latitude, coordinates?.longitude]);
 
     const isContractor = viewMode === 'contratante';
-    const profile = isContractor && jobDetails.assignedWorker ? jobDetails.assignedWorker : jobDetails.contractor;
-    const profileLabel = isContractor && jobDetails.assignedWorker ? 'Trabajador asignado' : 'Contratante';
-    const hasApplicants = isContractor && jobDetails.applicants.length > 0;
+     const applicants = useMemo<PersonSummary[]>(() => {
+        if (!jobDetails?.postulaciones) return [];
+        return jobDetails.postulaciones
+            .map((post) => toPersonSummary(post.usuario))
+            .filter((candidate): candidate is PersonSummary => Boolean(candidate?.id));
+    }, [jobDetails?.postulaciones]);
+
+    const assignedWorkers = useMemo(() => {
+        if (!isContractor) return [];
+
+        const assignedIDs = jobDetails?.changa?.trabajadores || [];
+        if (assignedIDs.length === 0) return [];
+
+        return applicants.filter((a) => assignedIDs.includes(a.id));
+    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
+
+    const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
+
+    const profile = isContractor ? assignedWorkers : contractorSummary;
+    const profileLabel =
+        isContractor && !assignedWorkers
+            ? null                   // 👉 OCULTAR si contratado y SIN asignado
+            : isContractor
+                ? 'Trabajador asignado'
+                : 'Contratante';
+
+    const hasApplicants = isContractor && applicants.length > 0;
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <ActivityIndicator style={{ marginTop: SPACING.lg }} color={palette.tint} size="large" />
+            </SafeAreaView>
+        );
+    }
+
+    if (errorMessage) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={{ padding: SPACING.lg }}>
+                    <Text style={styles.sectionTitle}>Ups...</Text>
+                    <Text style={styles.bodyText}>{errorMessage}</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!jobDetails) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={{ padding: SPACING.lg }}>
+                    <Text style={styles.sectionTitle}>No encontramos la changa.</Text>
+                    <Text style={styles.bodyText}>Intentá volver atrás e ingresar nuevamente.</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const { changa } = jobDetails;
+    const habilities = extractHabilities(changa);
+    const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
+    const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
+    const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
+    const locationDetail = changa.estado ? `Estado: ${changa.estado}` : 'Disponibilidad sujeta a confirmación';
 
     const renderApplicantCard = (w: PersonSummary) => (
     <TouchableOpacity
-        key={w.id}
-        style={styles.applicantCard}
-        activeOpacity={0.85}
-        onPress={() => goToProfile(w.id)}
-    >
-        <View style={styles.applicantAvatar}>
-            <Text style={styles.applicantInitials}>{w.initials}</Text>
-        </View>
+            key={w.id}
+            style={styles.applicantCard}
+            activeOpacity={0.85}
+            onPress={() => goToProfile(w.id)}
+        >
+            <View style={styles.applicantAvatar}>
+                <Text style={styles.applicantInitials}>{w.initials}</Text>
+            </View>
 
-        <Text style={styles.applicantName} numberOfLines={1}>{w.name}</Text>
+            <Text style={styles.applicantName} numberOfLines={1}>{w.name}</Text>
 
-        <Text style={styles.applicantSince}>⭐ {w.rating} ({w.reviews})</Text>
-       
-    </TouchableOpacity>
-);
+            {typeof w.rating === 'number' && (
+                <Text style={styles.applicantSince}>⭐ {w.rating.toFixed(1)}</Text>
+            )}
+
+        </TouchableOpacity>
+    );
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -119,29 +527,29 @@ const JobDetailsScreen = () => {
                 {/* Resumen */}
                 <View style={styles.summaryCard}>
                     <View style={styles.summaryIconWrapper}>
-                        <Ionicons name={jobDetails.icon} size={30} color={palette.tint} />
+                        <Ionicons name={summaryIcon} size={30} color={palette.tint} />
                     </View>
 
                     <View style={styles.summaryInfo}>
                         <View style={styles.summaryTitleRow}>
-                            <Text style={styles.summaryTitle}>{jobDetails.title}</Text>
-                            {jobDetails.urgent && (
+                            <Text style={styles.summaryTitle}>{changa.titulo || 'Changa sin título'}</Text>
+                             {changa.estado?.toLowerCase() === 'urgente' && (
                                 <View style={styles.urgentBadge}>
                                     <Text style={styles.urgentText}>URGENTE</Text>
                                 </View>
                             )}
                         </View>
 
-                        <Text style={styles.summaryPrice}>{jobDetails.price}</Text>
+                       <Text style={styles.summaryPrice}>{formatCurrency(changa.remuneracion)}</Text>
 
                         <View style={styles.summaryMetaRow}>
                             <Ionicons name="location-outline" size={14} color={palette.muted} />
-                            <Text style={styles.summaryMetaText}>{jobDetails.distance}</Text>
+                             <Text style={styles.summaryMetaText}>{locationText}</Text>
                         </View>
 
                         <View style={styles.summaryMetaRow}>
                             <Ionicons name="calendar-outline" size={14} color={palette.muted} />
-                            <Text style={styles.summaryMetaText}>{jobDetails.schedule}</Text>
+                           <Text style={styles.summaryMetaText}>{scheduleText}</Text>
                         </View>
                     </View>
                 </View>
@@ -149,54 +557,127 @@ const JobDetailsScreen = () => {
                 {/* Descripción */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Descripción</Text>
-                    <Text style={styles.bodyText}>{jobDetails.description}</Text>
+                   <Text style={styles.bodyText}>{changa.descripcion || 'El contratante no agregó descripción.'}</Text>
                 </View>
 
-                {/* Requisitos */}
+                {/* Habilidades */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Requisitos</Text>
-                    {jobDetails.requirements.map((req, i) => (
-                        <View key={i} style={styles.requirementRow}>
-                            <Ionicons name="checkmark-circle-outline" size={18} color={palette.tint} />
-                            <Text style={styles.bodyText}>{req}</Text>
-                        </View>
-                    ))}
+                    <Text style={styles.sectionTitle}>Habilidades requeridas</Text>
+                 {habilities.length === 0 ? (
+                        <Text style={styles.bodyText}>
+                            No existen habilidades requeridas para esta changa.
+                        </Text>
+                    ) : (
+                        habilities.map((req, i) => (
+                            <View key={i} style={styles.requirementRow}>
+                                <Ionicons name="checkmark-circle-outline" size={18} color={palette.tint} />
+                                <Text style={styles.bodyText}>{req}</Text>
+                            </View>
+                        ))
+                    )}
                 </View>
 
-                {/* Contratante o Trabajador */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>{profileLabel}</Text>
+                {/* ────────────────────────────────────────────────
+                    SECCIÓN: CONTRATANTE / TRABAJADOR ASIGNADO
+                ──────────────────────────────────────────────── */}
 
-                    <View style={styles.contractorCard}>
-                        <View style={styles.contractorAvatar}>
-                            <Text style={styles.contractorInitials}>{profile.initials}</Text>
-                        </View>
+                {/** CONTRATANTE viendo la changa **/}
+                {isContractor ? (
+                    <>
+                        {assignedWorkers.length > 0 && (
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>
+                                    {assignedWorkers.length === 1
+                                        ? "Trabajador asignado"
+                                        : "Trabajadores asignados"}
+                                </Text>
 
-                        <View style={styles.contractorInfo}>
-                            <Text style={styles.contractorName}>{profile.name}</Text>
-                            <Text style={styles.ratingText}>⭐ {profile.rating} ({profile.reviews})</Text>
-                            <Text style={styles.memberSinceText}>Miembro desde {profile.memberSince}</Text>
-                        </View>
+                                {assignedWorkers.map((worker) => (
+                                    <View key={worker.id} style={styles.contractorCard}>
+                                        <View style={styles.contractorAvatar}>
+                                            <Text style={styles.contractorInitials}>{worker.initials}</Text>
+                                        </View>
 
-                        <TouchableOpacity
-                            style={styles.profileButton}
-                            onPress={() => goToProfile(profile.id)}
-                        >
-                            <Text style={styles.profileButtonText}>Ver perfil</Text>
-                        </TouchableOpacity>
+                                        <View style={styles.contractorInfo}>
+                                            <Text style={styles.contractorName}>{worker.name}</Text>
+
+                                            {typeof worker.rating === "number" && (
+                                                <Text style={styles.ratingText}>⭐ {worker.rating.toFixed(1)}</Text>
+                                            )}
+
+                                            {worker.phone && (
+                                                <Text style={styles.memberSinceText}>Tel: {worker.phone}</Text>
+                                            )}
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={styles.profileButton}
+                                            onPress={() => goToProfile(worker.id)}
+                                        >
+                                            <Text style={styles.profileButtonText}>Ver perfil</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </>
+                ) : (
+                    /** TRABAJADOR viendo al CONTRATANTE **/
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Contratante</Text>
+
+                        {contractorSummary ? (
+                            <View style={styles.contractorCard}>
+                                <View style={styles.contractorAvatar}>
+                                    <Text style={styles.contractorInitials}>{contractorSummary.initials}</Text>
+                                </View>
+
+                                <View style={styles.contractorInfo}>
+                                    <Text style={styles.contractorName}>{contractorSummary.name}</Text>
+
+                                    {typeof contractorSummary.rating === "number" && (
+                                        <Text style={styles.ratingText}>
+                                            ⭐ {contractorSummary.rating.toFixed(1)}
+                                        </Text>
+                                    )}
+
+                                    {contractorSummary.phone ? (
+                                        <Text style={styles.memberSinceText}>Tel: {contractorSummary.phone}</Text>
+                                    ) : (
+                                        <Text style={styles.memberSinceText}>{contractorSummary.email}</Text>
+                                    )}
+
+                                    {contractorSummary.memberSince && (
+                                        <Text style={styles.memberSinceText}>
+                                            Miembro desde {contractorSummary.memberSince}
+                                        </Text>
+                                    )}
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.profileButton}
+                                    onPress={() => goToProfile(contractorSummary.id)}
+                                >
+                                    <Text style={styles.profileButtonText}>Ver perfil</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <Text style={styles.bodyText}>
+                                No pudimos recuperar los datos del contratante.
+                            </Text>
+                        )}
                     </View>
-                </View>
-
+                )}
                 {/* Postulantes */}
                 {hasApplicants && (
                     <View style={styles.section}>
                         <View style={styles.applicantsHeader}>
-                            <Text style={styles.sectionTitle}>Trabajadores postulados</Text>
-                            <Text style={styles.applicantsCounter}>{jobDetails.applicants.length}</Text>
+                            <Text style={styles.sectionTitle}>Postulantes</Text>
+                             <Text style={styles.applicantsCounter}>{applicants.length}</Text>
                         </View>
 
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {jobDetails.applicants.map(renderApplicantCard)}
+                                                     {applicants.map(renderApplicantCard)}
                         </ScrollView>
                     </View>
                 )}
@@ -209,41 +690,46 @@ const JobDetailsScreen = () => {
                     <View style={styles.locationCard}>
                         <Ionicons name="location-sharp" size={20} color={palette.tint} style={{ marginRight: SPACING.sm }} />
                         <View>
-                            <Text style={styles.addressText}>{jobDetails.location.address}</Text>
+                            <Text style={styles.addressText}>{locationText}</Text>
 
                             <View style={styles.walkingRow}>
                                 <Ionicons name="walk-outline" size={16} color={palette.muted} />
-                                <Text style={styles.walkingText}>{jobDetails.location.walkingTime}</Text>
+                               <Text style={styles.walkingText}>{locationDetail}</Text>
                             </View>
                         </View>
                     </View>
                 </View>
             </ScrollView>
-
                 <View style={styles.footer}>
-                    {isContractor ? (
-                        <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                            <TouchableOpacity style={[styles.actionButtonPrimary, { flex: 1 }]}>
-                                <Ionicons name="create-outline" size={20} color={palette.white} />
-                                <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.actionButtonSecondary, { flex: 1 }]}
-                                // Acá después conectás el cierre real con backend
-                                onPress={() => console.log("Cerrar changa")}
-                            >
-                                <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                                <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <TouchableOpacity style={styles.actionButtonPrimary}>
-                            <Ionicons name="hand-right-outline" size={20} color={palette.white} />
-                            <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                {isContractor ? (
+                    <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
+                        <TouchableOpacity 
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={() => 
+                                router.push({ 
+                                    pathname: "/changas/editar/[id]",
+                                    params: { id: jobDetails.changa.changaID }
+                                })
+                            }
+                        >
+                            <Ionicons name="create-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Editar</Text>
                         </TouchableOpacity>
-                    )}
-                </View>
+                        <TouchableOpacity
+                            style={[styles.actionButtonSecondary, { flex: 1 }]}
+                            onPress={() => console.log("Cerrar changa")}
+                        >
+                            <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
+                            <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <TouchableOpacity style={styles.actionButtonPrimary}>
+                        <Ionicons name="hand-right-outline" size={20} color={palette.white} />
+                        <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
 
 
             {!isContractor && (
