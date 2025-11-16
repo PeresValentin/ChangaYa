@@ -2,7 +2,10 @@ import {
   createPerfilService,
   getPerfilByUsuarioService,
   updatePerfilService,
-  deletePerfilService
+  deletePerfilService,
+  getGeneralRankingService,
+  getGeneralHabilitiesService,
+  getTop5SpecificHabilitiesService
 } from '../services/perfilService.js'
 
 export const createPerfil = async (req, res) => {
@@ -63,5 +66,38 @@ export const deletePerfil = async (req, res) => {
     res.json({ message: 'Perfil eliminado correctamente' })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+}
+
+//  1. General Ranking
+export const getGeneralRanking = async (req, res) => {
+  try {
+    const usuarioID = req.params.usuarioID
+    const result = await getGeneralRankingService(usuarioID)
+    res.json(result)
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+}
+
+//  2. General Habilities
+export const getGeneralHabilities = async (req, res) => {
+  try {
+    const usuarioID = req.params.usuarioID
+    const result = await getGeneralHabilitiesService(usuarioID)
+    res.json(result)
+  } catch (err) {
+    res.status(400).json({ error: err.message })
+  }
+}
+
+//  3. Top 5 Specific Habilities
+export const getTop5SpecificHabilities = async (req, res) => {
+  try {
+    const usuarioID = req.params.usuarioID
+    const result = await getTop5SpecificHabilitiesService(usuarioID)
+    res.json(result)
+  } catch (err) {
+    res.status(400).json({ error: err.message })
   }
 }
