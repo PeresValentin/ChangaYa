@@ -1,7 +1,8 @@
 // app/chats/index.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter, type Href } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   FlatList,
@@ -9,7 +10,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
   ActivityIndicator
 } from 'react-native';
@@ -17,7 +17,7 @@ import ChatListItem, { Chat } from '../../components/ChatListItem';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
-import { useProfileNavigation } from '../../hooks/use-profile-navigation';
+
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -39,8 +39,7 @@ interface ApiChatSummary {
 
 const ChatsScreen = () => {
   const router = useRouter();
-  const pathname = usePathname();
-  const { goToProfile } = useProfileNavigation();
+   const [refreshing, setRefreshing] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
@@ -58,9 +57,11 @@ const ChatsScreen = () => {
   };
 
   // Fetch a /api/chats/mine
-  const fetchChats = useCallback(async () => {
+   const fetchChats = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
 
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) return;
@@ -85,12 +86,26 @@ const ChatsScreen = () => {
     } catch (err) {
       console.log("Error cargando chats:", err);
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [API_URL]);
 
   useEffect(() => {
     fetchChats();
+  }, [fetchChats]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchChats({ silent: true });
+    }, [fetchChats])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchChats({ silent: true });
+    setRefreshing(false);
   }, [fetchChats]);
 
   // Navegar al chat
@@ -127,6 +142,8 @@ const ChatsScreen = () => {
                 <ChatListItem chat={item} onPress={() => handleChatPress(item.id)} />
               )}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
+               refreshing={refreshing}
+              onRefresh={handleRefresh}
             />
           )}
         </View>

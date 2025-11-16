@@ -1,10 +1,13 @@
 // app/chats/[id].tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -22,8 +25,7 @@ import { jwtDecode } from 'jwt-decode';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
 
-const { FONT, SPACING, RADIUS } = theme;
-const palette = theme.Colors.light;
+const { SPACING } = theme;
 
 // =======================
 // Tipos API
@@ -57,13 +59,23 @@ interface ApiChatDetalle {
 // =======================
 // Tipos Front
 // =======================
+
+type Attachment = {
+  type: 'audio';
+  uri?: string;
+  base64?: string;
+  durationMs?: number;
+};
+
 type Message = {
   id: string;
   text: string;
-  time: string;
   senderId: string;
+  createdAt: string;
+  formattedTime: string;
+  isPending?: boolean;
+  attachment?: Attachment | null;
 };
-
 type JwtPayload = {
   id?: string;
   usuarioID?: string;
@@ -72,19 +84,78 @@ type JwtPayload = {
   rol?: string;
 };
 
+const formatTime = (date: string | number | Date) =>
+  new Date(date).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const formatDuration = (ms?: number) => {
+  if (!ms || Number.isNaN(ms)) return '0:00';
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const parseAttachment = (raw?: string | null): Attachment | null => {
+  if (!raw) return null;
+
+  const fallbackFromDataUrl = () => {
+    if (raw.startsWith('data:audio')) {
+      const [, base64Content] = raw.split(',');
+      return {
+        type: 'audio',
+        base64: base64Content || raw,
+      } satisfies Attachment;
+    }
+    return null;
+  };
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.type === 'audio') {
+      if (typeof parsed.base64 === 'string') {
+        return {
+          type: 'audio',
+          base64: parsed.base64,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+
+      if (typeof parsed.uri === 'string') {
+        return {
+          type: 'audio',
+          uri: parsed.uri,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+    }
+  } catch {
+    return fallbackFromDataUrl();
+  }
+
+  if (raw.startsWith('http') || raw.startsWith('file:')) {
+    return { type: 'audio', uri: raw } satisfies Attachment;
+  }
+
+  return fallbackFromDataUrl();
+};
+
+
 // =======================
 // Helpers
 // =======================
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const AUDIO_PLACEHOLDER_TEXT = '[Audio]';
 
 const mapApiMessageToMessage = (m: ApiMensaje): Message => ({
   id: m.mensajeID,
-  text: m.contenido,
-  time: new Date(m.fecha).toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
+  text: m.contenido || '',
+  createdAt: m.fecha,
+  formattedTime: formatTime(m.fecha),
   senderId: m.usuarioID,
+  attachment: parseAttachment(m.archivoAdjunto),
 });
 
 const getDisplayName = (u?: ApiChatUser | null) => {
@@ -97,9 +168,162 @@ const getInitials = (u?: ApiChatUser | null) => {
   const name = getDisplayName(u);
   if (!name) return '?';
   const parts = name.split(' ').filter(Boolean);
-  const initials = parts.slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+  const initials = parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
   return initials || name[0]?.toUpperCase() || '?';
 };
+
+// =======================
+// Audio Attachment
+// =======================
+const AudioAttachment = ({
+  attachment,
+  isCurrentUser,
+}: {
+  attachment: Attachment & { type: 'audio' };
+  isCurrentUser: boolean;
+}) => {
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [playableUri, setPlayableUri] = useState<string | null>(attachment.uri ?? null);
+  const tempFileUriRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const cleanupTempFile = async () => {
+      if (tempFileUriRef.current) {
+        try {
+          await FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true });
+        } catch (error) {
+          console.warn('Error limpiando audio temporal:', error);
+        }
+        tempFileUriRef.current = null;
+      }
+    };
+
+    const stopExistingSound = async () => {
+      if (soundRef.current) {
+        try {
+          await soundRef.current.unloadAsync();
+        } catch (error) {
+          console.error('Error deteniendo audio:', error);
+        }
+        soundRef.current = null;
+        setIsPlaying(false);
+      }
+    };
+
+    const ensureUri = async () => {
+      if (attachment.uri) {
+        await stopExistingSound();
+        await cleanupTempFile();
+        if (isMounted) setPlayableUri(attachment.uri);
+        return;
+      }
+
+      if (!attachment.base64) return;
+
+      try {
+        await stopExistingSound();
+        await cleanupTempFile();
+        const tempUri = `${FileSystem.cacheDirectory}voice-${Date.now()}-${Math.random()}.m4a`;
+        await FileSystem.writeAsStringAsync(tempUri, attachment.base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        tempFileUriRef.current = tempUri;
+        if (isMounted) {
+          setPlayableUri(tempUri);
+        }
+      } catch (error) {
+        console.error('Error preparando audio:', error);
+      }
+    };
+
+    ensureUri();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [attachment.base64, attachment.uri]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      if (tempFileUriRef.current) {
+        FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true }).catch(() => {});
+        tempFileUriRef.current = null;
+      }
+    };
+  }, []);
+
+  const togglePlayback = useCallback(async () => {
+    if (!playableUri) return;
+
+    try {
+      if (!soundRef.current) {
+        setIsLoading(true);
+        const { sound: createdSound } = await Audio.Sound.createAsync({ uri: playableUri });
+        soundRef.current = createdSound;
+        createdSound.setOnPlaybackStatusUpdate((status) => {
+          if (!status.isLoaded) return;
+          setIsPlaying(status.isPlaying);
+          if (status.didJustFinish) {
+            createdSound.setPositionAsync(0);
+            setIsPlaying(false);
+          }
+        });
+        await createdSound.playAsync();
+        setIsPlaying(true);
+      } else {
+        const status = await soundRef.current.getStatusAsync();
+        if (!status.isLoaded) return;
+        if (status.isPlaying) {
+          await soundRef.current.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error reproduciendo audio:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [playableUri]);
+
+  return (
+    <View style={styles.audioBubble}>
+      <TouchableOpacity
+        style={[styles.audioPlayButton, (!playableUri || isLoading) && styles.audioButtonDisabled]}
+        onPress={togglePlayback}
+        disabled={!playableUri || isLoading}
+      >
+        <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="#fff" />
+      </TouchableOpacity>
+      <View style={styles.audioMeta}>
+        <Text style={[styles.audioLabel, isCurrentUser ? styles.textRight : styles.textLeft]}>
+          Nota de voz
+        </Text>
+        {attachment.durationMs ? (
+          <Text
+            style={[styles.audioDuration, isCurrentUser ? styles.textRight : styles.textLeft]}
+          >
+            {formatDuration(attachment.durationMs)}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+};
+
 
 // =======================
 // Burbuja de Mensaje
@@ -112,6 +336,12 @@ const MessageBubble = ({
   currentUserId: string | null;
 }) => {
   const isCurrentUser = currentUserId != null && message.senderId === currentUserId;
+  const audioAttachment = message.attachment?.type === 'audio' ? message.attachment : null;
+  const shouldShowText =
+    !!message.text &&
+    message.text.trim().length > 0 &&
+    (!audioAttachment || message.text !== AUDIO_PLACEHOLDER_TEXT);
+
 
   return (
     <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
@@ -121,36 +351,27 @@ const MessageBubble = ({
           isCurrentUser ? styles.bubbleRight : styles.bubbleLeft,
         ]}
       >
-        <Text
-          style={[
-            styles.messageText,
-            isCurrentUser ? styles.textRight : styles.textLeft,
-          ]}
-        >
-          {message.text}
-        </Text>
+        {audioAttachment ? (
+          <AudioAttachment attachment={audioAttachment} isCurrentUser={isCurrentUser} />
+        ) : null}
+        {shouldShowText ? (
+          <Text
+            style={[
+              styles.messageText,
+              isCurrentUser ? styles.textRight : styles.textLeft,
+            ]}
+          >
+            {message.text}
+          </Text>
+        ) : null}
       </View>
       <Text style={styles.timestamp}>
-        {message.time} {isCurrentUser && '✓✓'}
+       {message.formattedTime} {isCurrentUser && !message.isPending && '✓✓'}
       </Text>
     </View>
   );
 };
 
-// =======================
-// Tarjeta de Changa (placeholder)
-// =======================
-const RelatedChangaCard = () => (
-  <View style={styles.changaCard}>
-    <View style={styles.changaIcon}>
-      <Ionicons name="build-outline" size={24} color="#34A853" />
-    </View>
-    <View style={styles.changaDetails}>
-      <Text style={styles.changaTitle}>Changa relacionada</Text>
-      <Text style={styles.changaInfo}>Vinculá acá la changa real luego</Text>
-    </View>
-  </View>
-);
 
 // =======================
 // Pantalla principal
@@ -165,14 +386,24 @@ const ChatScreen = () => {
   const [details, setDetails] = useState<ApiChatDetalle | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-
+const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimeMs, setRecordingTimeMs] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isOtherOnline, setIsOtherOnline] = useState(false);
-
+   const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  }, []);
   const socketRef = useRef<Socket | null>(null);
   const lastTypingRef = useRef(false);
+   const listRef = useRef<FlatList<Message> | null>(null);
 
   // ---- Derivar el otro usuario del chat ----
   const otherUser: ApiChatUser | null = useMemo(() => {
@@ -181,6 +412,160 @@ const ChatScreen = () => {
       ? details.usuario2
       : details.usuario1;
   }, [details, currentUserId]);
+
+  const sortMessages = useCallback((items: Message[]) => {
+    return items.slice().sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, []);
+
+  const mergeIncomingMessage = useCallback(
+    (incoming: Message) => {
+      setMessages((prev) => {
+        const withoutOptimistic = prev.filter(
+          (msg) =>
+            !(
+              msg.isPending &&
+              msg.senderId === incoming.senderId &&
+              msg.text === incoming.text
+            )
+        );
+
+        const existingIndex = withoutOptimistic.findIndex(
+          (msg) => msg.id === incoming.id
+        );
+
+        if (existingIndex !== -1) {
+          const updated = [...withoutOptimistic];
+          updated[existingIndex] = { ...incoming };
+          return sortMessages(updated);
+        }
+
+        return sortMessages([...withoutOptimistic, incoming]);
+      });
+    },
+    [sortMessages]
+  );
+   const sendAudioMessage = useCallback(
+    async (uri: string, durationMs?: number) => {
+      if (!socketRef.current || !id || !currentUserId) return;
+
+      try {
+        setIsSendingAudio(true);
+        const base64Audio = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const contenido = AUDIO_PLACEHOLDER_TEXT;
+        const attachmentPayload = {
+          type: 'audio',
+          mimeType: 'audio/m4a',
+          base64: base64Audio,
+          durationMs,
+        };
+
+        const optimisticMsg: Message = {
+          id: `temp-audio-${Date.now()}`,
+          text: contenido,
+          senderId: currentUserId,
+          createdAt: new Date().toISOString(),
+          formattedTime: formatTime(new Date()),
+          isPending: true,
+          attachment: {
+            type: 'audio',
+            uri,
+            durationMs,
+          },
+        };
+
+        setMessages((prev) => sortMessages([...prev, optimisticMsg]));
+
+        socketRef.current.emit('sendMessage', {
+          chatID: id,
+          contenido,
+          archivoAdjunto: JSON.stringify(attachmentPayload),
+        });
+      } catch (error) {
+        console.error('Error enviando audio:', error);
+      } finally {
+        setIsSendingAudio(false);
+      }
+    },
+    [currentUserId, id, sortMessages]
+  );
+
+  const startRecording = useCallback(async () => {
+    if (isRecording || isSendingAudio) return;
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permiso requerido',
+          'Necesitamos acceso al micrófono para poder grabar y enviar notas de voz.'
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      recordingRef.current = recording;
+      recordingStartTimeRef.current = Date.now();
+      setRecordingTimeMs(0);
+      setIsRecording(true);
+
+      clearRecordingTimer();
+      recordingIntervalRef.current = setInterval(() => {
+        if (recordingStartTimeRef.current) {
+          setRecordingTimeMs(Date.now() - recordingStartTimeRef.current);
+        }
+      }, 200);
+    } catch (error) {
+      console.error('Error iniciando grabación:', error);
+      setIsRecording(false);
+      clearRecordingTimer();
+    }
+  }, [clearRecordingTimer, isRecording, isSendingAudio]);
+
+  const stopRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      const durationMs = recordingStartTimeRef.current
+        ? Date.now() - recordingStartTimeRef.current
+        : recordingTimeMs;
+
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      if (uri) {
+        await sendAudioMessage(uri, durationMs);
+      }
+    } catch (error) {
+      console.error('Error deteniendo grabación:', error);
+    } finally {
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+    }
+  }, [clearRecordingTimer, recordingTimeMs, sendAudioMessage]);
 
   // =======================
   // 1) Cargar token, userID, chatDetails y mensajes iniciales
@@ -221,12 +606,11 @@ const ChatScreen = () => {
         );
 
         const mapped = msgRes.data
-          .slice()
+          .map(mapApiMessageToMessage)
           .sort(
             (a, b) =>
-              new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-          )
-          .map(mapApiMessageToMessage);
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
 
         setMessages(mapped);
       } catch (err) {
@@ -257,26 +641,25 @@ const ChatScreen = () => {
     // Nuevo mensaje recibido
     socket.on('nuevoMensaje', (apiMsg: ApiMensaje) => {
       if (apiMsg.chatID !== id) return;
-      setMessages((prev) => [mapApiMessageToMessage(apiMsg), ...prev]);
+      mergeIncomingMessage(mapApiMessageToMessage(apiMsg));
     });
 
     // Indicador escribiendo...
     socket.on('typing', ({ userID, isTyping }) => {
-      if (!otherUser) return;
-      if (userID === otherUser.usuarioID) {
+     if (userID === otherUser?.usuarioID) {
         setIsOtherTyping(!!isTyping);
       }
     });
 
     // Presencia básica
     socket.on('userOnline', ({ userID }) => {
-      if (otherUser && userID === otherUser.usuarioID) {
+       if (userID === otherUser?.usuarioID) {
         setIsOtherOnline(true);
       }
     });
 
     socket.on('userOffline', ({ userID }) => {
-      if (otherUser && userID === otherUser.usuarioID) {
+      if (userID === otherUser?.usuarioID) {
         setIsOtherOnline(false);
       }
     });
@@ -285,13 +668,15 @@ const ChatScreen = () => {
       socket.emit('leaveChat', { chatID: id, userID: currentUserId });
       socket.disconnect();
       socketRef.current = null;
+      setIsOtherTyping(false);
+      setIsOtherOnline(false);
     };
-  }, [id, currentUserId, token, otherUser?.usuarioID]);
-
+ }, [currentUserId, id, mergeIncomingMessage, otherUser?.usuarioID, token]);
   // =======================
   // 3) Enviar mensaje
   // =======================
   const handleSend = () => {
+    if (isRecording || isSendingAudio) return;
     if (!newMessage.trim()) return;
     if (!socketRef.current || !id || !currentUserId) return;
 
@@ -302,14 +687,13 @@ const ChatScreen = () => {
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
       text: contenido,
-      time: new Date().toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
       senderId: currentUserId,
+      createdAt: new Date().toISOString(),
+      formattedTime: formatTime(new Date()),
+      isPending: true,
     };
 
-    setMessages((prev) => [optimisticMsg, ...prev]);
+    setMessages((prev) => sortMessages([...prev, optimisticMsg]));
 
     socketRef.current.emit('sendMessage', {
       chatID: id,
@@ -333,6 +717,35 @@ const ChatScreen = () => {
     }
   };
 
+  useEffect(() => {
+    if (!messages.length) return;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [messages.length]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
+    };
+  }, []);
+
+
+  const renderItem = useCallback(
+    ({ item }: { item: Message }) => (
+      <MessageBubble message={item} currentUserId={currentUserId} />
+    ),
+    [currentUserId]
+  );
+
   // =======================
   // 5) Render
   // =======================
@@ -342,55 +755,53 @@ const ChatScreen = () => {
     ? 'En línea'
     : 'Desconectado';
 
+   const headerDisplayName = getDisplayName(otherUser) || 'Chat';
+   const canSendText = newMessage.trim().length > 0 && !isRecording && !isSendingAudio;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* HEADER CONFIG */}
-      <Stack.Screen
-        options={{
-          headerTitle: () => (
-            <View style={styles.headerContainer}>
-              <View style={styles.headerAvatar}>
-                <Text style={styles.headerAvatarText}>
-                  {getInitials(otherUser)}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>
-                  {getDisplayName(otherUser) || 'Chat'}
-                </Text>
-                <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
-              </View>
-            </View>
-          ),
-          headerRight: () =>
-            otherUser ? (
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => goToProfile(otherUser.usuarioID)}
-              >
-                <Ionicons name="person-circle-outline" size={24} color="#333" />
-              </TouchableOpacity>
-            ) : null,
-          headerBackTitle: '',
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: '#F9FEFB' },
-        }}
-      />
+      {/* HEADER INLINE (el layout global tiene header oculto) */}
+      <View style={styles.inlineHeaderWrapper}>
+        <TouchableOpacity
+          style={styles.inlineHeaderContent}
+          activeOpacity={0.8}
+          onPress={() => otherUser && goToProfile(otherUser.usuarioID)}
+        >
+          <View style={styles.headerAvatar}>
+            <Text style={styles.headerAvatarText}>{getInitials(otherUser)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>{headerDisplayName}</Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {otherUser && (
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => goToProfile(otherUser.usuarioID)}
+          >
+            <Ionicons name="person-circle-outline" size={28} color="#333" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* LISTA DE MENSAJES */}
       <FlatList
+        ref={listRef}
         data={messages}
-        renderItem={({ item }) => (
-          <MessageBubble message={item} currentUserId={currentUserId} />
-        )}
+        renderItem={renderItem}
         keyExtractor={(item) => item.id}
         style={styles.messageList}
-        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 10 }}
-        inverted
+        contentContainerStyle={{
+          paddingHorizontal: 10,
+          paddingVertical: 10,
+        }}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           !loading ? (
             <View style={{ padding: SPACING.lg }}>
@@ -400,22 +811,41 @@ const ChatScreen = () => {
         }
       />
 
-      {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
-      {/* <RelatedChangaCard />
+       {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
+      {/* <RelatedChangaCard /> */}
 
       {/* INPUT */}
       <View style={styles.inputContainer}>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="mic-outline" size={24} color="#555" />
+         <TouchableOpacity
+          style={[styles.iconButton, (isRecording || isSendingAudio) && styles.iconButtonActive]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isSendingAudio}
+        >
+          <Ionicons
+            name={isRecording ? 'stop' : 'mic-outline'}
+            size={24}
+            color={isRecording ? '#b91c1c' : '#555'}
+          />
         </TouchableOpacity>
+        {isRecording ? (
+          <Text style={styles.recordTimer}>{formatDuration(recordingTimeMs)}</Text>
+        ) : isSendingAudio ? (
+          <Text style={styles.uploadingAudioText}>Enviando audio...</Text>
+        ) : null}
+
         <TextInput
           style={styles.textInput}
           placeholder="Escribe un mensaje..."
           value={newMessage}
           onChangeText={handleChangeText}
           multiline
+          editable={!isRecording}
         />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+        <TouchableOpacity
+          style={[styles.sendButton, !canSendText && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={!canSendText}
+        >
           <Ionicons name="send" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -471,6 +901,23 @@ const styles = StyleSheet.create({
         padding: 6,
     },
 
+    inlineHeaderWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        backgroundColor: '#F9FEFB',
+    },
+    inlineHeaderContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 12,
+    },
     // ===== LISTA DE MENSAJES =====
     messageList: {
         flex: 1,
@@ -495,6 +942,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         borderRadius: 20,
         marginBottom: 2,
+        gap: 6,
     },
     bubbleLeft: {
         backgroundColor: '#E6E6E6',
@@ -532,6 +980,50 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
 
+    iconButtonActive: {
+        backgroundColor: '#FEE2E2',
+        borderRadius: 20,
+    },
+       sendButtonDisabled: {
+        opacity: 0.4,
+    },
+    recordTimer: {
+        color: '#b91c1c',
+        fontWeight: 'bold',
+        marginHorizontal: 8,
+        minWidth: 48,
+        textAlign: 'center',
+    },
+    uploadingAudioText: {
+        color: '#6B7280',
+        fontSize: 12,
+        marginHorizontal: 8,
+    },
+    audioBubble: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    audioPlayButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#34A853',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    audioButtonDisabled: {
+        opacity: 0.5,
+    },
+    audioMeta: {
+        flex: 1,
+    },
+    audioLabel: {
+        fontWeight: '600',
+    },
+    audioDuration: {
+        fontSize: 12,
+    },
     // ===== CHANGA CARD =====
     changaCard: {
         flexDirection: 'row',
