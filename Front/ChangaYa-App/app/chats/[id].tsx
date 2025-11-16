@@ -1,235 +1,428 @@
-// Front/ChangaYa-App/app/chats/[id].tsx
+// app/chats/[id].tsx
 
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { io, Socket } from 'socket.io-client';
+import { jwtDecode } from 'jwt-decode';
+
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
+import theme from '../../constants/theme';
 
-// --- Datos de Ejemplo ---
-// (Reemplazar con tu lógica de Supabase)
+const { FONT, SPACING, RADIUS } = theme;
+const palette = theme.Colors.light;
 
-// Simulamos los detalles del chat que abrimos
-// En la vida real, harías un fetch a Supabase usando el 'id'
-const DUMMY_CHAT_DETAILS = {
-    id: '1',
-    userId: 'worker-002',
-    user: 'Ana Martínez',
-    avatar: 'AM', // Podría ser una URL a una imagen
-    online: true,
-};
+// =======================
+// Tipos API
+// =======================
+interface ApiMensaje {
+  mensajeID: string;
+  fecha: string;
+  contenido: string;
+  archivoAdjunto?: string | null;
+  chatID: string;
+  usuarioID: string;
+}
 
-// Simulamos los mensajes de ESE chat
-// 'current_user_id' es el ID del usuario logueado (el tuyo)
-const DUMMY_MESSAGES: Message[] = [
-    { id: 'm1', text: 'Hola! Me interesa la changa de plomería. ¿Todavía está disponible?', time: '10:30', senderId: 'ana_martinez' },
-    { id: 'm2', text: '¡Hola Ana! Sí, está disponible. ¿Cuándo podrías venir?', time: '10:32', senderId: 'current_user_id' },
-    { id: 'm3', text: 'Puedo ir esta tarde a las 15hs', time: '10:33', senderId: 'ana_martinez' },
-    { id: 'm4', text: 'Perfecto! Te espero entonces', time: '10:33', senderId: 'current_user_id' },
-    { id: 'm5', text: '¿Cuál es la dirección exacta?', time: '10:35', senderId: 'ana_martinez' },
-    { id: 'm6', text: 'Calle 50 y 15, La Plata', time: '10:36', senderId: 'current_user_id', type: 'location' },
-    { id: 'm7', text: 'Genial! Llego en 15 minutos', time: '10:36', senderId: 'ana_martinez' },
-    { id: 'm8', text: '¡Perfecto! 🚀', time: '10:38', senderId: 'current_user_id' },
-];
+interface ApiChatUser {
+  usuarioID: string;
+  nombre?: string;
+  apellido?: string;
+  nombreUsuario?: string;
+  email?: string;
+  telefono?: string;
+  rankingGeneral?: number | null;
+}
 
-// --- Tipos (para TypeScript) ---
+interface ApiChatDetalle {
+  chatID: string;
+  fechaInicio: string;
+  usuario1: ApiChatUser;
+  usuario2: ApiChatUser;
+}
+
+// =======================
+// Tipos Front
+// =======================
 type Message = {
-    id: string;
-    text: string;
-    time: string;
-    senderId: string;
-    type?: 'text' | 'location'; // Para mensajes especiales
+  id: string;
+  text: string;
+  time: string;
+  senderId: string;
 };
 
-// --- Componente de Burbuja de Mensaje ---
-const MessageBubble = ({ message }: { message: Message }) => {
-    // Determinamos si el mensaje es del usuario actual
-    const isCurrentUser = message.senderId === 'current_user_id';
-
-    // Renderizado especial para la ubicación
-    if (message.type === 'location') {
-        return (
-            <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
-                <View style={[styles.messageBubble, isCurrentUser ? styles.bubbleRight : styles.bubbleLeft, styles.locationBubble]}>
-                    <Ionicons name="location-sharp" size={20} color={isCurrentUser ? '#fff' : '#333'} />
-                    <Text style={[styles.messageText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                        Ubicación compartida
-                    </Text>
-                    <Text style={[styles.locationText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                        {message.text}
-                    </Text>
-                </View>
-                <Text style={styles.timestamp}>{message.time}</Text>
-            </View>
-        );
-    }
-    
-    // Renderizado para mensajes de texto
-    return (
-        <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
-            <View style={[styles.messageBubble, isCurrentUser ? styles.bubbleRight : styles.bubbleLeft]}>
-                <Text style={[styles.messageText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                    {message.text}
-                </Text>
-            </View>
-            <Text style={styles.timestamp}>{message.time} {isCurrentUser && '✓✓'}</Text>
-        </View>
-    );
+type JwtPayload = {
+  id?: string;
+  usuarioID?: string;
+  userId?: string;
+  email?: string;
+  rol?: string;
 };
 
-// --- Componente de "Changa Relacionada" ---
-// (Basado en tu captura)
-const RelatedChangaCard = () => (
-    <View style={styles.changaCard}>
-        <View style={styles.changaIcon}>
-            <Ionicons name="build-outline" size={24} color="#34A853" />
-        </View>
-        <View style={styles.changaDetails}>
-            <Text style={styles.changaTitle}>Plomero Urgente</Text>
-            <Text style={styles.changaInfo}>$15.000 • A 0.5 km</Text>
-        </View>
+// =======================
+// Helpers
+// =======================
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const mapApiMessageToMessage = (m: ApiMensaje): Message => ({
+  id: m.mensajeID,
+  text: m.contenido,
+  time: new Date(m.fecha).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+  senderId: m.usuarioID,
+});
+
+const getDisplayName = (u?: ApiChatUser | null) => {
+  if (!u) return '';
+  const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+  return full || u.nombreUsuario || 'Usuario';
+};
+
+const getInitials = (u?: ApiChatUser | null) => {
+  const name = getDisplayName(u);
+  if (!name) return '?';
+  const parts = name.split(' ').filter(Boolean);
+  const initials = parts.slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+  return initials || name[0]?.toUpperCase() || '?';
+};
+
+// =======================
+// Burbuja de Mensaje
+// =======================
+const MessageBubble = ({
+  message,
+  currentUserId,
+}: {
+  message: Message;
+  currentUserId: string | null;
+}) => {
+  const isCurrentUser = currentUserId != null && message.senderId === currentUserId;
+
+  return (
+    <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
+      <View
+        style={[
+          styles.messageBubble,
+          isCurrentUser ? styles.bubbleRight : styles.bubbleLeft,
+        ]}
+      >
+        <Text
+          style={[
+            styles.messageText,
+            isCurrentUser ? styles.textRight : styles.textLeft,
+          ]}
+        >
+          {message.text}
+        </Text>
+      </View>
+      <Text style={styles.timestamp}>
+        {message.time} {isCurrentUser && '✓✓'}
+      </Text>
     </View>
+  );
+};
+
+// =======================
+// Tarjeta de Changa (placeholder)
+// =======================
+const RelatedChangaCard = () => (
+  <View style={styles.changaCard}>
+    <View style={styles.changaIcon}>
+      <Ionicons name="build-outline" size={24} color="#34A853" />
+    </View>
+    <View style={styles.changaDetails}>
+      <Text style={styles.changaTitle}>Changa relacionada</Text>
+      <Text style={styles.changaInfo}>Vinculá acá la changa real luego</Text>
+    </View>
+  </View>
 );
 
-// --- Pantalla Principal del Chat ---
+// =======================
+// Pantalla principal
+// =======================
 const ChatScreen = () => {
-    // 1. OBTENER EL ID DEL CHAT
-    // 'useLocalSearchParams' lee los parámetros de la URL, en este caso, el '[id]'
-    const { id } = useLocalSearchParams();
-    const { goToProfile } = useProfileNavigation();
-    
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [newMessage, setNewMessage] = useState('');
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { goToProfile } = useProfileNavigation();
 
-    // 2. LÓGICA DE INGENIERÍA (Carga de Datos)
-    useEffect(() => {
-        // Aquí harías tu fetch a Supabase
-        // const fetchMessages = async () => {
-        //     const { data, error } = await supabase
-        //         .from('messages')
-        //         .select('*')
-        //         .eq('chat_id', id) // Usamos el ID de la ruta
-        //         .order('created_at', { ascending: false }); // Pedir los más nuevos primero
-            
-        //     if (data) setMessages(data);
-        // }
-        // fetchMessages();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-        // Por ahora, usamos los datos de ejemplo
-        // Invertimos los mensajes para que FlatList (con 'inverted') los muestre correctamente
-        setMessages(DUMMY_MESSAGES.slice().reverse()); 
+  const [details, setDetails] = useState<ApiChatDetalle | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
 
-    }, [id]); // Se ejecuta cada vez que el 'id' del chat cambie
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
 
-    // 3. LÓGICA DE INGENIERÍA (Enviar Mensaje)
-    const handleSend = () => {
-        if (newMessage.trim() === '') return;
+  const [loading, setLoading] = useState(true);
 
-        // Aquí enviarías el mensaje a Supabase
-        // const { data, error } = await supabase
-        //     .from('messages')
-        //     .insert([
-        //         { chat_id: id, sender_id: 'current_user_id', text: newMessage }
-        //     ]);
-        
-        // Y aquí lo agregarías al estado local (simulación)
-        const sentMessage: Message = {
-            id: `m${Math.random()}`,
-            text: newMessage,
-            time: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-            senderId: 'current_user_id'
-        };
-        // Agregamos el nuevo mensaje al principio (porque la lista está invertida)
-        setMessages(prevMessages => [sentMessage, ...prevMessages]);
-        setNewMessage('');
+  const socketRef = useRef<Socket | null>(null);
+  const lastTypingRef = useRef(false);
+
+  // ---- Derivar el otro usuario del chat ----
+  const otherUser: ApiChatUser | null = useMemo(() => {
+    if (!details || !currentUserId) return null;
+    return details.usuario1.usuarioID === currentUserId
+      ? details.usuario2
+      : details.usuario1;
+  }, [details, currentUserId]);
+
+  // =======================
+  // 1) Cargar token, userID, chatDetails y mensajes iniciales
+  // =======================
+  useEffect(() => {
+    const init = async () => {
+      if (!id) return;
+      try {
+        setLoading(true);
+        const storedToken = await AsyncStorage.getItem('jwtToken');
+        if (!storedToken) {
+          console.warn('⛔ No hay token JWT en AsyncStorage');
+          setLoading(false);
+          return;
+        }
+        setToken(storedToken);
+
+        const decoded = jwtDecode<JwtPayload>(storedToken);
+        const userIdFromToken =
+          decoded.id || decoded.usuarioID || decoded.userId || null;
+        setCurrentUserId(userIdFromToken);
+
+        // Traer detalles del chat (usuario1/usuario2)
+        const chatRes = await axios.get<ApiChatDetalle>(
+          `${API_URL}/api/chats/${id}`,
+          {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          }
+        );
+        setDetails(chatRes.data);
+
+        // Traer mensajes del chat
+        const msgRes = await axios.get<ApiMensaje[]>(
+          `${API_URL}/api/chats/${id}/mensajes`,
+          {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          }
+        );
+
+        const mapped = msgRes.data
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+          )
+          .map(mapApiMessageToMessage);
+
+        setMessages(mapped);
+      } catch (err) {
+        console.error('❌ Error inicializando chat:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    return (
-        <KeyboardAvoidingView 
-            style={styles.container}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} // Ajuste fino
-        >
-            {/* 4. CONFIGURACIÓN DEL HEADER */}
-            {/* Usamos Stack.Screen para configurar el header de esta ruta dinámica */}
-            <Stack.Screen
-                options={{
-                    // Esto recrea el header de tu captura
-                    headerTitle: () => (
-                        <View style={styles.headerContainer}>
-                            <Image style={styles.headerAvatar} source={{ uri: 'https://via.placeholder.com/40' }} />
-                            <View>
-                                <Text style={styles.headerTitle}>{DUMMY_CHAT_DETAILS.user}</Text>
-                                <Text style={styles.headerSubtitle}>En línea</Text>
-                            </View>
-                        </View>
-                    ),
-                    headerRight: () => (
-                        <View style={styles.headerActions}>
-                            <TouchableOpacity
-                                style={styles.headerIconButton}
-                                onPress={() => goToProfile(DUMMY_CHAT_DETAILS.userId)}
-                                accessibilityLabel="Ver perfil"
-                            >
-                                <Ionicons name="person-circle-outline" size={24} color="#333" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.headerIconButton}>
-                                <Ionicons name="ellipsis-vertical" size={24} color="#333" />
-                            </TouchableOpacity>
-                        </View>
-                    ),
-                    headerBackTitle: '', // Esto pone un texto vacío en el botón 'Atrás' de iOS // Oculta el texto "Atrás" en iOS
-                    headerShadowVisible: false, // Quita la sombra
-                    headerStyle: { backgroundColor: '#F9FEFB' }, // Color de fondo del header
-                }}
-            />
+    init();
+  }, [id]);
 
-            {/* 5. LISTA DE MENSAJES */}
-            {/* 'inverted' es clave para los chats. 
-              Renderiza la lista al revés (del final al principio)
-              y los nuevos items se agregan "abajo".
-            */}
-            <FlatList
-                data={messages}
-                renderItem={({ item }) => <MessageBubble message={item} />}
-                keyExtractor={(item) => item.id}
-                style={styles.messageList}
-                contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 10 }}
-                inverted // ¡Muy importante para chats!
-            />
+  // =======================
+  // 2) Conectar socket.io y manejar eventos
+  // =======================
+  useEffect(() => {
+    if (!id || !currentUserId || !token || !API_URL) return;
 
-            {/* 6. TARJETA DE CHANGA RELACIONADA */}
-            <RelatedChangaCard />
+    const socket = io(API_URL, {
+      transports: ['websocket'],
+      auth: { token },
+    });
 
-            {/* 7. BARRA DE ENTRADA */}
-            <View style={styles.inputContainer}>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Ionicons name="mic-outline" size={24} color="#555" />
-                </TouchableOpacity>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder="Escribe un mensaje..."
-                    value={newMessage}
-                    onChangeText={setNewMessage}
-                    multiline
-                />
-                <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-                    <Ionicons name="send" size={22} color="#fff" />
-                </TouchableOpacity>
+    socketRef.current = socket;
+
+    socket.emit('joinChat', { chatID: id, userID: currentUserId });
+
+    // Nuevo mensaje recibido
+    socket.on('nuevoMensaje', (apiMsg: ApiMensaje) => {
+      if (apiMsg.chatID !== id) return;
+      setMessages((prev) => [mapApiMessageToMessage(apiMsg), ...prev]);
+    });
+
+    // Indicador escribiendo...
+    socket.on('typing', ({ userID, isTyping }) => {
+      if (!otherUser) return;
+      if (userID === otherUser.usuarioID) {
+        setIsOtherTyping(!!isTyping);
+      }
+    });
+
+    // Presencia básica
+    socket.on('userOnline', ({ userID }) => {
+      if (otherUser && userID === otherUser.usuarioID) {
+        setIsOtherOnline(true);
+      }
+    });
+
+    socket.on('userOffline', ({ userID }) => {
+      if (otherUser && userID === otherUser.usuarioID) {
+        setIsOtherOnline(false);
+      }
+    });
+
+    return () => {
+      socket.emit('leaveChat', { chatID: id, userID: currentUserId });
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [id, currentUserId, token, otherUser?.usuarioID]);
+
+  // =======================
+  // 3) Enviar mensaje
+  // =======================
+  const handleSend = () => {
+    if (!newMessage.trim()) return;
+    if (!socketRef.current || !id || !currentUserId) return;
+
+    const contenido = newMessage.trim();
+    setNewMessage('');
+
+    // Optimistic UI
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      text: contenido,
+      time: new Date().toLocaleTimeString('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      senderId: currentUserId,
+    };
+
+    setMessages((prev) => [optimisticMsg, ...prev]);
+
+    socketRef.current.emit('sendMessage', {
+      chatID: id,
+      contenido,
+      // userID es opcional, el backend puede tomar socket.data.userID
+    });
+  };
+
+  // =======================
+  // 4) Cambio de texto -> "typing"
+  // =======================
+  const handleChangeText = (text: string) => {
+    setNewMessage(text);
+
+    if (!socketRef.current || !id) return;
+
+    const isTypingNow = text.trim().length > 0;
+    if (isTypingNow !== lastTypingRef.current) {
+      socketRef.current.emit('typing', { chatID: id, isTyping: isTypingNow });
+      lastTypingRef.current = isTypingNow;
+    }
+  };
+
+  // =======================
+  // 5) Render
+  // =======================
+  const headerSubtitle = isOtherTyping
+    ? 'Escribiendo...'
+    : isOtherOnline
+    ? 'En línea'
+    : 'Desconectado';
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* HEADER CONFIG */}
+      <Stack.Screen
+        options={{
+          headerTitle: () => (
+            <View style={styles.headerContainer}>
+              <View style={styles.headerAvatar}>
+                <Text style={styles.headerAvatarText}>
+                  {getInitials(otherUser)}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>
+                  {getDisplayName(otherUser) || 'Chat'}
+                </Text>
+                <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+              </View>
             </View>
-        </KeyboardAvoidingView>
-    );
+          ),
+          headerRight: () =>
+            otherUser ? (
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => goToProfile(otherUser.usuarioID)}
+              >
+                <Ionicons name="person-circle-outline" size={24} color="#333" />
+              </TouchableOpacity>
+            ) : null,
+          headerBackTitle: '',
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: '#F9FEFB' },
+        }}
+      />
+
+      {/* LISTA DE MENSAJES */}
+      <FlatList
+        data={messages}
+        renderItem={({ item }) => (
+          <MessageBubble message={item} currentUserId={currentUserId} />
+        )}
+        keyExtractor={(item) => item.id}
+        style={styles.messageList}
+        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 10 }}
+        inverted
+        ListEmptyComponent={
+          !loading ? (
+            <View style={{ padding: SPACING.lg }}>
+              <Text style={styles.emptyText}>Todavía no hay mensajes.</Text>
+            </View>
+          ) : null
+        }
+      />
+
+      {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
+      {/* <RelatedChangaCard />
+
+      {/* INPUT */}
+      <View style={styles.inputContainer}>
+        <TouchableOpacity style={styles.iconButton}>
+          <Ionicons name="mic-outline" size={24} color="#555" />
+        </TouchableOpacity>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Escribe un mensaje..."
+          value={newMessage}
+          onChangeText={handleChangeText}
+          multiline
+        />
+        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+          <Ionicons name="send" size={22} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
 };
+
 
 export default ChatScreen;
 
@@ -237,9 +430,10 @@ export default ChatScreen;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FEFB', // Un blanco-verdoso muy claro
+        backgroundColor: '#F9FEFB',
     },
-    // Header
+
+    // ===== HEADER =====
     headerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -249,7 +443,14 @@ const styles = StyleSheet.create({
         height: 40,
         borderRadius: 20,
         marginRight: 10,
-        backgroundColor: '#E0F0E0' // Placeholder
+        backgroundColor: '#E0F0E0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerAvatarText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#111',
     },
     headerTitle: {
         fontSize: 17,
@@ -269,21 +470,26 @@ const styles = StyleSheet.create({
     headerIconButton: {
         padding: 6,
     },
-    // Lista de Mensajes
+
+    // ===== LISTA DE MENSAJES =====
     messageList: {
         flex: 1,
     },
+
     messageRow: {
         marginBottom: 10,
         maxWidth: '80%',
+        flexDirection: 'row',
+        alignItems: 'flex-end',
     },
     rowLeft: {
         alignSelf: 'flex-start',
     },
     rowRight: {
         alignSelf: 'flex-end',
-        alignItems: 'flex-end', // Para que el timestamp quede a la derecha
+        alignItems: 'flex-end',
     },
+
     messageBubble: {
         paddingVertical: 10,
         paddingHorizontal: 15,
@@ -291,13 +497,14 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     bubbleLeft: {
-        backgroundColor: '#E6E6E6', // Gris claro para el receptor
+        backgroundColor: '#E6E6E6',
         borderBottomLeftRadius: 5,
     },
     bubbleRight: {
-        backgroundColor: '#34A853', // Verde para el usuario actual
+        backgroundColor: '#34A853',
         borderBottomRightRadius: 5,
     },
+
     messageText: {
         fontSize: 16,
     },
@@ -307,11 +514,14 @@ const styles = StyleSheet.create({
     textRight: {
         color: '#fff',
     },
+
     timestamp: {
         fontSize: 12,
         color: '#999',
         paddingHorizontal: 5,
     },
+
+    // Para mensajes de ubicación
     locationBubble: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -321,7 +531,8 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 8,
     },
-    // Changa Card
+
+    // ===== CHANGA CARD =====
     changaCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -359,7 +570,8 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
-    // Input
+
+    // ===== INPUT =====
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -377,7 +589,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         fontSize: 16,
         marginHorizontal: 10,
-        maxHeight: 100, // Para que no crezca indefinidamente
+        maxHeight: 100,
     },
     iconButton: {
         padding: 5,
@@ -389,5 +601,13 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+
+    // ===== LIST EMPTY =====
+    emptyText: {
+        textAlign: 'center',
+        color: '#6B7280',
+        padding: 20,
+        fontSize: 15,
     },
 });
