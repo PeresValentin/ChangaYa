@@ -175,6 +175,19 @@ const getInitials = (u?: ApiChatUser | null) => {
   return initials || name[0]?.toUpperCase() || '?';
 };
 
+
+let globalSound: Audio.Sound | null = null;
+
+const stopGlobalSound = async () => {
+  if (globalSound) {
+    try {
+      await globalSound.stopAsync();
+      await globalSound.unloadAsync();
+    } catch {}
+    globalSound = null;
+  }
+};
+
 // =======================
 // Audio Attachment
 // =======================
@@ -267,27 +280,42 @@ const AudioAttachment = ({
     if (!playableUri) return;
 
     try {
+      // 🔥 DETENER AUDIO GLOBAL SI EXISTE
+      if (!soundRef.current) {
+        await stopGlobalSound();
+      }
+
       if (!soundRef.current) {
         setIsLoading(true);
-        const { sound: createdSound } = await Audio.Sound.createAsync({ uri: playableUri });
-        soundRef.current = createdSound;
-        createdSound.setOnPlaybackStatusUpdate((status) => {
+
+        const { sound } = await Audio.Sound.createAsync({ uri: playableUri });
+        soundRef.current = sound;
+        globalSound = sound; // 🔥 REGISTRAR COMO AUDIO GLOBAL
+
+        sound.setOnPlaybackStatusUpdate((status) => {
           if (!status.isLoaded) return;
           setIsPlaying(status.isPlaying);
+          // 🔥 Cuando terminó, NO volver a reproducir
           if (status.didJustFinish) {
-            createdSound.setPositionAsync(0);
+            sound.setPositionAsync(0);
+            sound.pauseAsync();       // 🔥 aseguramos que quede pausado
             setIsPlaying(false);
+            globalSound = null;
           }
         });
-        await createdSound.playAsync();
+
+        await sound.playAsync();
         setIsPlaying(true);
       } else {
         const status = await soundRef.current.getStatusAsync();
         if (!status.isLoaded) return;
+
         if (status.isPlaying) {
           await soundRef.current.pauseAsync();
           setIsPlaying(false);
         } else {
+          await stopGlobalSound();        //  PARAR CUALQUIER OTRO ANTES
+          globalSound = soundRef.current; //  REGISTRASTE ESTE COMO EL ÚNICO
           await soundRef.current.playAsync();
           setIsPlaying(true);
         }
@@ -297,7 +325,7 @@ const AudioAttachment = ({
     } finally {
       setIsLoading(false);
     }
-  }, [playableUri]);
+  }, [playableUri])
 
   return (
     <View style={styles.audioBubble}>
@@ -342,9 +370,13 @@ const MessageBubble = ({
     message.text.trim().length > 0 &&
     (!audioAttachment || message.text !== AUDIO_PLACEHOLDER_TEXT);
 
-
   return (
-    <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
+    <View
+      style={[
+        styles.messageRow,
+        isCurrentUser ? styles.rowRight : styles.rowLeft,
+      ]}
+    >
       <View
         style={[
           styles.messageBubble,
@@ -354,6 +386,7 @@ const MessageBubble = ({
         {audioAttachment ? (
           <AudioAttachment attachment={audioAttachment} isCurrentUser={isCurrentUser} />
         ) : null}
+
         {shouldShowText ? (
           <Text
             style={[
@@ -364,10 +397,28 @@ const MessageBubble = ({
             {message.text}
           </Text>
         ) : null}
+
+        {/* HORA + TILDES DENTRO DE LA BURBUJA */}
+        <View style={styles.timestampWrapper}>
+          <Text
+            style={[
+              styles.timestampInside,
+              isCurrentUser ? styles.timestampRight : styles.timestampLeft,
+            ]}
+          >
+            {message.formattedTime}
+          </Text>
+
+          {isCurrentUser && !message.isPending ? (
+            <Ionicons
+              name="checkmark-done"
+              size={14}
+              color={isCurrentUser ? '#DFF6E4' : '#7A7A7A'}
+              style={{ marginLeft: 3 }}
+            />
+          ) : null}
+        </View>
       </View>
-      <Text style={styles.timestamp}>
-       {message.formattedTime} {isCurrentUser && !message.isPending && '✓✓'}
-      </Text>
     </View>
   );
 };
@@ -814,25 +865,10 @@ const [isRecording, setIsRecording] = useState(false);
        {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
       {/* <RelatedChangaCard /> */}
 
-      {/* INPUT */}
+      {/* INPUT AREA */}
       <View style={styles.inputContainer}>
-         <TouchableOpacity
-          style={[styles.iconButton, (isRecording || isSendingAudio) && styles.iconButtonActive]}
-          onPress={isRecording ? stopRecording : startRecording}
-          disabled={isSendingAudio}
-        >
-          <Ionicons
-            name={isRecording ? 'stop' : 'mic-outline'}
-            size={24}
-            color={isRecording ? '#b91c1c' : '#555'}
-          />
-        </TouchableOpacity>
-        {isRecording ? (
-          <Text style={styles.recordTimer}>{formatDuration(recordingTimeMs)}</Text>
-        ) : isSendingAudio ? (
-          <Text style={styles.uploadingAudioText}>Enviando audio...</Text>
-        ) : null}
 
+        {/* INPUT */}
         <TextInput
           style={styles.textInput}
           placeholder="Escribe un mensaje..."
@@ -841,13 +877,36 @@ const [isRecording, setIsRecording] = useState(false);
           multiline
           editable={!isRecording}
         />
-        <TouchableOpacity
-          style={[styles.sendButton, !canSendText && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!canSendText}
-        >
-          <Ionicons name="send" size={22} color="#fff" />
-        </TouchableOpacity>
+
+        {/* TIMER (solo mientras se graba) */}
+        {isRecording && (
+          <Text style={styles.recordTimer}>
+            {formatDuration(recordingTimeMs)}
+          </Text>
+        )}
+
+        {/* MIC o STOP cuando no hay texto */}
+        {!canSendText ? (
+          <TouchableOpacity
+            style={[styles.iconButton, isRecording && styles.iconButtonActive]}
+            onPress={isRecording ? stopRecording : startRecording}
+            disabled={isSendingAudio}
+          >
+            <Ionicons
+              name={isRecording ? "stop" : "mic"}
+              size={24}
+              color={isRecording ? "#b91c1c" : "#555"}
+            />
+          </TouchableOpacity>
+        ) : (
+          // BOTÓN DE ENVIAR CUANDO HAY TEXTO
+          <TouchableOpacity
+            style={styles.sendButton}
+            onPress={handleSend}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -938,12 +997,14 @@ const styles = StyleSheet.create({
     },
 
     messageBubble: {
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderRadius: 20,
-        marginBottom: 2,
-        gap: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 15,
+      paddingRight: 60, // *** espacio para hora
+      borderRadius: 20,
+      marginBottom: 2,
+      gap: 6,
     },
+
     bubbleLeft: {
         backgroundColor: '#E6E6E6',
         borderBottomLeftRadius: 5,
@@ -1000,29 +1061,34 @@ const styles = StyleSheet.create({
         marginHorizontal: 8,
     },
     audioBubble: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      minWidth: 180,
+      maxWidth: 260,
     },
     audioPlayButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#34A853',
-        justifyContent: 'center',
-        alignItems: 'center',
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#34A853',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    audioMeta: {
+      marginLeft: 10,
+    },
+    audioLabel: {
+      fontWeight: '500',
+      fontSize: 14,
+    },
+    audioDuration: {
+      fontSize: 12,
+      color: '#555',
     },
     audioButtonDisabled: {
         opacity: 0.5,
-    },
-    audioMeta: {
-        flex: 1,
-    },
-    audioLabel: {
-        fontWeight: '600',
-    },
-    audioDuration: {
-        fontSize: 12,
     },
     // ===== CHANGA CARD =====
     changaCard: {
@@ -1065,26 +1131,43 @@ const styles = StyleSheet.create({
 
     // ===== INPUT =====
     inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-        backgroundColor: '#fff',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: '#f0f0f0',
+      backgroundColor: '#fff',
     },
     textInput: {
-        flex: 1,
-        backgroundColor: '#f1f1f1',
-        borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        fontSize: 16,
-        marginHorizontal: 10,
-        maxHeight: 100,
+      flex: 1,
+      backgroundColor: '#f1f1f1',
+      borderRadius: 20,
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      fontSize: 16,
+      maxHeight: 100,
+      marginRight: 8, // esto deja espacio antes del botón derecho
+    },
+    actionButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#34A853',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    actionButtonActive: {
+      backgroundColor: '#FEE2E2',
     },
     iconButton: {
-        padding: 5,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#E6F4EA',
+      marginRight: 6,
     },
     sendButton: {
         backgroundColor: '#34A853',
@@ -1101,5 +1184,25 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         padding: 20,
         fontSize: 15,
+    },
+    timestampWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      position: 'absolute',
+      bottom: 4,
+      right: 10,
+    },
+
+    timestampInside: {
+      fontSize: 11,
+      opacity: 0.9,
+    },
+
+    timestampRight: {
+      color: '#DFF6E4', // para verde
+    },
+
+    timestampLeft: {
+      color: '#7A7A7A', // para gris
     },
 });
