@@ -1,7 +1,7 @@
 // app/chats/[id].tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -393,36 +393,31 @@ const ChatScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* HEADER CONFIG */}
-      <Stack.Screen
-        options={{
-          headerTitle: () => (
-            <View style={styles.headerContainer}>
-              <View style={styles.headerAvatar}>
-                <Text style={styles.headerAvatarText}>
-                  {getInitials(otherUser)}
-                </Text>
-              </View>
-              <View>
-                 <Text style={styles.headerTitle}>{headerDisplayName}</Text>
-                <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
-              </View>
-            </View>
-          ),
-          headerRight: () =>
-            otherUser ? (
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => goToProfile(otherUser.usuarioID)}
-              >
-                <Ionicons name="person-circle-outline" size={24} color="#333" />
-              </TouchableOpacity>
-            ) : null,
-          headerBackTitle: '',
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: '#F9FEFB' },
-        }}
-      />
+      {/* HEADER INLINE (el layout global tiene header oculto) */}
+      <View style={styles.inlineHeaderWrapper}>
+        <TouchableOpacity
+          style={styles.inlineHeaderContent}
+          activeOpacity={0.8}
+          onPress={() => otherUser && goToProfile(otherUser.usuarioID)}
+        >
+          <View style={styles.headerAvatar}>
+            <Text style={styles.headerAvatarText}>{getInitials(otherUser)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>{headerDisplayName}</Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {otherUser && (
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => goToProfile(otherUser.usuarioID)}
+          >
+            <Ionicons name="person-circle-outline" size={28} color="#333" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* LISTA DE MENSAJES */}
       <FlatList
@@ -516,6 +511,23 @@ const styles = StyleSheet.create({
         padding: 6,
     },
 
+    inlineHeaderWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        backgroundColor: '#F9FEFB',
+    },
+    inlineHeaderContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 12,
+    },
     // ===== LISTA DE MENSAJES =====
     messageList: {
         flex: 1,
