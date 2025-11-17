@@ -1,5 +1,65 @@
 import { supabase } from '../config/supabaseClient.js'
 
+const WORKER_ID_ALIASES = [
+  'trabajadorID',
+  'trabajadorId',
+  'trabajador',
+  'trabajadorAsignado',
+  'trabajadorAsignadoId',
+  'usuarioAsignadoId',
+  'usuarioAsignadoID'
+]
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key)
+
+const normalizeTrabajadoresUpdate = (rawUpdates = {}, changa) => {
+  const sanitized = { ...rawUpdates }
+  let aliasValue
+
+  for (const key of WORKER_ID_ALIASES) {
+    if (aliasValue === undefined && sanitized[key] !== undefined && sanitized[key] !== null) {
+      aliasValue = sanitized[key]
+    }
+    delete sanitized[key]
+  }
+
+  const touchedDirectField = hasOwn(rawUpdates, 'trabajadores')
+  if (!touchedDirectField && aliasValue === undefined) {
+    return sanitized
+  }
+
+  const existingWorkers = Array.isArray(changa?.trabajadores)
+    ? changa.trabajadores.filter(Boolean).map((id) => String(id))
+    : []
+
+  let incomingWorkers = null
+  if (touchedDirectField) {
+    const directValue = rawUpdates.trabajadores
+    if (directValue == null) {
+      incomingWorkers = []
+    } else if (Array.isArray(directValue)) {
+      incomingWorkers = directValue.filter(Boolean).map((id) => String(id))
+    } else {
+      incomingWorkers = [String(directValue)]
+    }
+  } else if (aliasValue !== undefined && aliasValue !== null) {
+    incomingWorkers = [String(aliasValue)]
+  }
+
+  if (incomingWorkers) {
+    const base = touchedDirectField ? incomingWorkers : [...existingWorkers, ...incomingWorkers]
+    sanitized.trabajadores = [...new Set(base)]
+  }
+
+  return sanitized
+}
+
+const isUserAssignedToChanga = (changa, userId) => {
+  if (!changa || !userId) return false
+  if (!Array.isArray(changa.trabajadores)) return false
+  return changa.trabajadores.map((id) => String(id)).includes(String(userId))
+}
+
 /**
  * Crear una nueva changa
  * Solo usuarios autenticados pueden crear.
@@ -13,9 +73,7 @@ export const createChanga = async (req, res) => {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
     }
 
-    // Definir rol y columna correspondiente
-    const columnaRol = user.rol === 'trabajador' ? 'trabajadorID' : 'contratanteID'
-
+    
     const { data, error } = await supabase
       .from('Changa')
       .insert([
@@ -27,7 +85,8 @@ export const createChanga = async (req, res) => {
           horaFin,
           ubicacion,
           estado: 'iniciada',
-          [columnaRol]: user.id  // asignamos automáticamente el ID del JWT
+          trabajadores: user.rol === 'trabajador' ? [user.id] : [],
+          ...(user.rol === 'contratante' ? { contratanteID: user.id } : {})
         }
       ])
       .select()
@@ -71,7 +130,7 @@ export const getChangasByTrabajador = async (req, res) => {
     const { data, error } = await supabase
       .from('Changa')
       .select('*')
-      .eq('trabajadorID', user.id)
+       .contains('trabajadores', [user.id])
 
     if (error) throw error
     res.status(200).json(data)
@@ -120,13 +179,16 @@ export const updateChanga = async (req, res) => {
       .single()
 
     if (!changa) return res.status(404).json({ error: 'Changa no encontrada' })
-    if (changa.trabajadorID !== user.id && changa.contratanteID !== user.id && user.rol !== 'admin') {
+     const esTrabajadorAsignado = isUserAssignedToChanga(changa, user.id)
+    if (!esTrabajadorAsignado && changa.contratanteID !== user.id && user.rol !== 'admin') {
       return res.status(403).json({ error: 'No autorizado para modificar esta changa' })
     }
 
+    const sanitizedUpdates = normalizeTrabajadoresUpdate(updates, changa)
+
     const { data, error } = await supabase
       .from('Changa')
-      .update(updates)
+      .update(sanitizedUpdates)
       .eq('changaID', id)
       .select()
 
@@ -152,7 +214,8 @@ export const deleteChanga = async (req, res) => {
       .single()
 
     if (!changa) return res.status(404).json({ error: 'Changa no encontrada' })
-    if (changa.trabajadorID !== user.id && changa.contratanteID !== user.id && user.rol !== 'admin') {
+    const esTrabajadorAsignado = isUserAssignedToChanga(changa, user.id)
+    if (!esTrabajadorAsignado && changa.contratanteID !== user.id && user.rol !== 'admin') {
       return res.status(403).json({ error: 'No autorizado para eliminar esta changa' })
     }
 

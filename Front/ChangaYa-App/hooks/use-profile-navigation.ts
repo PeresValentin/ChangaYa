@@ -1,26 +1,83 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { MOCK_CURRENT_USER } from '@/constants/mock-auth';
+type StoredUserShape = {
+  id?: string | number;
+  _id?: string | number;
+  usuarioID?: string | number;
+  usuarioId?: string | number;
+  userId?: string | number;
+};
+
+const extractUserId = (rawUser: unknown): string | null => {
+  if (!rawUser || typeof rawUser !== 'object') {
+    return null;
+  }
+
+  const candidate =
+    (rawUser as StoredUserShape).id ??
+    (rawUser as StoredUserShape)._id ??
+    (rawUser as StoredUserShape).usuarioID ??
+    (rawUser as StoredUserShape).userId ??
+    (rawUser as StoredUserShape).usuarioId;
+
+  return candidate ? String(candidate) : null;
+};
+
+type ProfileNavigationOptions = {
+  changaId?: string | number | null;
+};
 
 export const useProfileNavigation = () => {
   const router = useRouter();
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem('userData');
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser) as unknown;
+        const extractedId = extractUserId(parsedUser);
+        if (extractedId) {
+          setCurrentUserId(extractedId);
+        }
+      } catch (error) {
+        console.error('Error al recuperar el usuario desde AsyncStorage', error);
+      }
+    };
+
+    loadUser();
+  }, []);
+
   const goToProfile = useCallback(
-    (userId?: string) => {
-      if (!userId || userId === MOCK_CURRENT_USER.id) {
-        router.push({ pathname: '/profile' });
+    (userId?: string | null, options?: ProfileNavigationOptions) => {
+      const normalizedChangaId =
+        options?.changaId !== undefined && options?.changaId !== null
+          ? String(options.changaId)
+          : undefined;
+      if (!userId || (currentUserId && userId === currentUserId)) {
+        if (normalizedChangaId) {
+          router.push({ pathname: '/profile', params: { changaId: normalizedChangaId } });
+        } else {
+          router.push('/profile');
+        }
         return;
       }
 
-      router.push({ pathname: '/profile/[id]', params: { id: userId } });
+      router.push({
+        pathname: '/profile/[id]',
+        params: normalizedChangaId ? { id: userId, changaId: normalizedChangaId } : { id: userId },
+      });
     },
-    [router],
+    [currentUserId, router],
   );
 
   return {
     goToProfile,
-    currentUser: MOCK_CURRENT_USER,
-    currentUserId: MOCK_CURRENT_USER.id,
+    currentUserId,
   };
 };
