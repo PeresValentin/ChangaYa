@@ -495,6 +495,58 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, checkExistingApplication, currentUserId, hasApplied, isContractor, jobDetails?.changa?.changaID]);
 
+    const handleCloseApplications = useCallback(async () => {
+        if (!isContractor) return;
+        if (!jobDetails?.changa?.changaID) return;
+
+        Alert.alert(
+            "Cerrar postulaciones",
+            "¿Confirmás que querés cerrar las postulaciones? Esta acción enviará todas las postulaciones a aceptadas o rechazadas según corresponda.",
+            [
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "Confirmar",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const token = await AsyncStorage.getItem("jwtToken");
+                            if (!token) {
+                                Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+                                return;
+                            }
+
+                            await axios.post(
+                                `${API_URL}/api/changas/cerrar/${jobDetails.changa.changaID}`,
+                                {},
+                                {
+                                    headers: {
+                                        Authorization: `Bearer ${token}`,
+                                    },
+                                }
+                            );
+
+                            Alert.alert(
+                                "Postulaciones cerradas",
+                                "La changa pasó a estado 'en proceso'."
+                            );
+
+                            await fetchJobDetails();
+
+                        } catch (err: any) {
+                            console.error("Error cerrando postulaciones:", err?.response?.data || err);
+
+                            const backendMessage =
+                                err?.response?.data?.error || "Ocurrió un error inesperado.";
+
+                            Alert.alert("Error", backendMessage);
+                        }
+                    },
+                },
+            ]
+        );
+    }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
+
+
 useFocusEffect(
   useCallback(() => {
     // Esta función que le pasamos a useFocusEffect es síncrona
@@ -872,10 +924,10 @@ useFocusEffect(
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.actionButtonSecondary, { flex: 1 }]}
-                            onPress={() => console.log("Cerrar changa")}
+                            onPress={handleCloseApplications}
                         >
                             <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                            <Text style={styles.actionButtonTextSecondary}>Cerrar</Text>
+                            <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
@@ -1125,7 +1177,7 @@ const styles = StyleSheet.create({
 
 actionButtonTextSecondary: {
     color: palette.tint,
-    fontSize: FONT.md,
+    fontSize: FONT.sm,
     fontWeight: "bold",
 },
 });

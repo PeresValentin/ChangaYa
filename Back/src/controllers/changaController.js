@@ -437,3 +437,101 @@ export const getChangaDetalle = async (req, res) => {
     return res.status(500).json({ error: err.message })
   }
 }
+
+/**
+ * Cerrar postulaciones de una changa:
+ * - Solo el contratante dueño puede cerrar
+ * - La changa debe tener al menos 1 trabajador asignado
+ * - Acepta/rechaza postulaciones en base a trabajadores asignados
+ * - Cambia changa.estado: "iniciada" → "enProceso"
+ */
+export const cerrarPostulaciones = async (req, res) => {
+  try {
+    const { id } = req.params;     // changaID
+    const user = req.user;         // { id, rol }
+
+    // 1) Solo contratante puede cerrar postulaciones
+    if (user.rol !== "contratante") {
+      return res.status(403).json({ error: "Solo el contratante puede cerrar postulaciones" });
+    }
+
+    // 2) Buscar changa
+    const { data: changa, error: changaError } = await supabase
+      .from("Changa")
+      .select("*")
+      .eq("changaID", id)
+      .single();
+
+    if (changaError) throw changaError;
+    if (!changa) return res.status(404).json({ error: "Changa no encontrada" });
+
+    // 3) Validar dueño de la changa
+    if (String(changa.contratanteID) !== String(user.id)) {
+      return res.status(403).json({ error: "No autorizado. Esta changa no te pertenece" });
+    }
+
+    // 4) Validar estado actual
+    if (changa.estado !== "iniciada") {
+      return res.status(400).json({
+        error: `Solo se pueden cerrar postulaciones cuando la changa está en estado 'iniciada'. Estado actual: ${changa.estado}`
+      });
+    }
+
+    // 5) Validar que tenga al menos un trabajador asignado
+    const workers = Array.isArray(changa.trabajadores)
+      ? changa.trabajadores.map((id) => String(id))
+      : [];
+
+    if (workers.length === 0) {
+      return res.status(400).json({
+        error: "No se pueden cerrar postulaciones sin al menos un trabajador asignado"
+      });
+    }
+
+    // 6) Obtener todas las postulaciones de la changa
+    const { data: postulaciones, error: postError } = await supabase
+      .from("Postulacion")
+      .select("*")
+      .eq("changaID", id);
+
+    if (postError) throw postError;
+
+    // 7) Procesar aceptadas / rechazadas
+    const updates = postulaciones.map((p) => {
+      const esAceptada = workers.includes(String(p.usuarioID));
+      return {
+        postulacionID: p.postulacionID,
+        estado: esAceptada ? "aceptada" : "rechazada"
+      };
+    });
+
+    // 8) Actualizar cada postulación
+    for (const u of updates) {
+      const { error: updError } = await supabase
+        .from("Postulacion")
+        .update({ estado: u.estado })
+        .eq("postulacionID", u.postulacionID);
+
+      if (updError) throw updError;
+    }
+
+    // 9) Actualizar estado de la changa → enProceso
+    const { error: changaUpdateError } = await supabase
+      .from("Changa")
+      .update({ estado: "enProceso" })
+      .eq("changaID", id);
+
+    if (changaUpdateError) throw changaUpdateError;
+
+    return res.status(200).json({
+      message: "Postulaciones cerradas correctamente",
+      aceptadas: updates.filter((u) => u.estado === "aceptada").length,
+      rechazadas: updates.filter((u) => u.estado === "rechazada").length,
+      nuevoEstado: "enProceso"
+    });
+
+  } catch (err) {
+    console.error("❌ Error en cerrarPostulaciones:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
