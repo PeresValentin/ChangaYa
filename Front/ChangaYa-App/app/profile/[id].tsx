@@ -25,6 +25,11 @@ const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
 
+type ApiPerfil = {
+  descripcion?: string | null;
+};
+
+
 type ApiUser = {
   usuarioID?: string | number;
   usuarioId?: string | number;
@@ -106,7 +111,7 @@ const parseSkills = (skills: ApiUser["habilidades"]): SkillItem[] => {
   }));
 };
 
-const mapUserToPublicProfile = (user: ApiUser, fallbackId: string): PublicProfile => {
+const mapUserToPublicProfile = (user: ApiUser, perfil: ApiPerfil | null, fallbackId: string): PublicProfile => {
   const rating = typeof user.rankingGeneral === "number" ? user.rankingGeneral : 0;
   const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : null;
   const completedJobs =
@@ -117,6 +122,7 @@ const mapUserToPublicProfile = (user: ApiUser, fallbackId: string): PublicProfil
       : undefined;
 
   const aboutText =
+    sanitizeText(perfil?.descripcion) ||
     sanitizeText(user.descripcion) ||
     sanitizeText(user.sobreMi) ||
     "Este usuario aún no agregó una descripción.";
@@ -166,6 +172,12 @@ const PerfilPublicoScreen = () => {
         return;
       }
 
+       if (!API_URL) {
+        setErrorMessage("La aplicación no tiene configurada la URL de la API.");
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setErrorMessage(null);
@@ -176,11 +188,24 @@ const PerfilPublicoScreen = () => {
           return;
         }
 
-        const response = await axios.get<ApiUser>(`${API_URL}/api/usuarios/${profileId}`, {
-          headers: { Authorization: `Bearer ${token}` },
+         const headers = { Authorization: `Bearer ${token}` };
+        const response = await axios.get<ApiUser>(`${API_URL}/api/usuarios/public/${profileId}`, {
+          headers,
         });
 
-        setProfile(mapUserToPublicProfile(response.data, profileId));
+        let perfilData: ApiPerfil | null = null;
+        try {
+          const perfilResponse = await axios.get<ApiPerfil>(`${API_URL}/api/perfil/usuario/${profileId}`, {
+            headers,
+          });
+          perfilData = perfilResponse.data;
+        } catch (perfilError: any) {
+          if (perfilError?.response?.status !== 404) {
+            console.warn("No pudimos obtener el perfil extendido", perfilError?.response?.data || perfilError);
+          }
+        }
+
+        setProfile(mapUserToPublicProfile(response.data, perfilData, profileId));
       } catch (error: any) {
         console.error("Error al cargar el perfil público", error?.response?.data || error);
         const backendMessage =

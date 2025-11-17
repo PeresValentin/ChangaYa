@@ -43,6 +43,37 @@ export const getUsuarioById = async (req, res) => {
   res.json(data)
 }
 
+// Obtener un usuario para vista pública (solo lectura)
+export const getUsuarioPublicProfile = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const { data, error } = await supabase
+      .from('Usuario')
+      .select('*')
+      .eq('usuarioID', id)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Usuario no encontrado' })
+      }
+      throw error
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Usuario no encontrado' })
+    }
+
+    const { clave, dni, ...publicUser } = data
+    return res.status(200).json(publicUser)
+  } catch (err) {
+    console.error('Error en getUsuarioPublicProfile:', err)
+    return res.status(500).json({ error: err.message })
+  }
+}
+
+
 // Crear nuevo usuario
 export const createUsuario = async (req, res) => {
   try {
