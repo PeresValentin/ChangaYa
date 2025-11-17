@@ -23,6 +23,10 @@ const palette = theme.Colors.light;
 
 interface ApiUser {
     usuarioID?: string;
+    usuarioId?: string | number;
+    id?: string | number;
+    _id?: string | number;
+    userId?: string | number;
     nombre?: string;
     apellido?: string;
     nombreUsuario?: string;
@@ -89,7 +93,7 @@ const sanitizeName = (value?: string | null) => (value ?? '').trim();
 
 const buildDisplayName = (userLike?: ApiUser | null) => {
     if (!userLike) return '';
-
+    
     const first = sanitizeName(userLike?.nombre);
     const last = sanitizeName(userLike?.apellido);
     const fullname = [first, last].filter(Boolean).join(' ').trim();
@@ -122,9 +126,18 @@ const buildInitials = (name: string) => {
 
 const toPersonSummary = (userLike?: ApiUser | null): PersonSummary | null => {
     if (!userLike) return null;
+    const candidateId =
+        userLike.usuarioID ||
+        userLike.usuarioId ||
+        userLike.id ||
+        userLike._id ||
+        userLike.userId;
+
+    if (!candidateId) return null;
+
     const name = buildDisplayName(userLike) || 'Usuario';
     return {
-        id: String(userLike.usuarioID || ''),
+        id: String(candidateId),
         initials: buildInitials(name),
         name,
         rating: typeof userLike.rankingGeneral === 'number' ? userLike.rankingGeneral : null,
@@ -294,14 +307,69 @@ const JobDetailsScreen = () => {
     const { id, viewMode } = useLocalSearchParams<{ id?: string, viewMode?: string }>();
     const { goToProfile } = useProfileNavigation();
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
-        const router = useRouter();
+    const router = useRouter();
+    const isContractor = viewMode === 'contratante';    
 
     const [jobDetails, setJobDetails] = useState<JobDetailsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [reverseGeocodedAddress, setReverseGeocodedAddress] = useState<string | null>(null);
 
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [isApplying, setIsApplying] = useState(false);
+    const [hasApplied, setHasApplied] = useState(false);
+    const [isCheckingApplication, setIsCheckingApplication] = useState(false);
+
     const coordinates = useMemo(() => parsePointCoordinates(jobDetails?.changa?.ubicacion), [jobDetails?.changa?.ubicacion]);
+
+    useEffect(() => {
+        const loadUserData = async () => {
+            try {
+                const storedUser = await AsyncStorage.getItem('userData');
+                if (!storedUser) return;
+
+                const parsedUser = JSON.parse(storedUser);
+                const extractedID =
+                    parsedUser?.id ||
+                    parsedUser?._id ||
+                    parsedUser?.usuarioID ||
+                    parsedUser?.userId;
+
+                if (extractedID) {
+                    setCurrentUserId(String(extractedID));
+                }
+            } catch (storageError) {
+                console.error('Error al recuperar el usuario desde AsyncStorage', storageError);
+            }
+        };
+
+        loadUserData();
+    }, []);
+
+    const checkExistingApplication = useCallback(async () => {
+        if (isContractor || !id || !currentUserId) return;
+
+        try {
+            setIsCheckingApplication(true);
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) {
+                return;
+            }
+
+            const response = await axios.get(`${API_URL}/api/postulaciones/mis`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const data = Array.isArray(response.data) ? response.data : [];
+            const alreadyApplied = data.some((post: any) => String(post.changaID) === String(id));
+            setHasApplied(alreadyApplied);
+        } catch (applicationError: any) {
+            console.error('Error al verificar postulaciones', applicationError?.response?.data || applicationError);
+        } finally {
+            setIsCheckingApplication(false);
+        }
+    }, [API_URL, currentUserId, id, isContractor]);
+
     const fetchJobDetails = useCallback(async () => {
         if (!id) {
             setErrorMessage('No se encontró el identificador de la changa.');
@@ -344,6 +412,48 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, id]);
 
+     const handleApply = useCallback(async () => {
+        if (isContractor || !jobDetails?.changa?.changaID || hasApplied) {
+            return;
+        }
+
+        try {
+            setIsApplying(true);
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) {
+                Alert.alert('Sesión expirada', 'Iniciá sesión nuevamente para postularte.');
+                return;
+            }
+
+            await axios.post(
+                `${API_URL}/api/postulaciones`,
+                {
+                    changaID: jobDetails.changa.changaID,
+                    usuarioID: currentUserId,
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+
+            setHasApplied(true);
+            Alert.alert('Postulación enviada', 'Tu postulación fue enviada correctamente.');
+            await checkExistingApplication();
+        } catch (applyError: any) {
+            console.error('Error al postularse', applyError?.response?.data || applyError);
+            const backendMessage = applyError?.response?.data?.error
+                || 'No pudimos enviar tu postulación. Intentá nuevamente.';
+            Alert.alert('Error', backendMessage);
+
+            const normalizedMessage = typeof backendMessage === 'string' ? backendMessage.toLowerCase() : '';
+            if (normalizedMessage.includes('ya te postulaste')) {
+                setHasApplied(true);
+            }
+        } finally {
+            setIsApplying(false);
+        }
+    }, [API_URL, checkExistingApplication, currentUserId, hasApplied, isContractor, jobDetails?.changa?.changaID]);
+
 useFocusEffect(
   useCallback(() => {
     // Esta función que le pasamos a useFocusEffect es síncrona
@@ -358,7 +468,9 @@ useFocusEffect(
     };
   }, [fetchJobDetails]) // La dependencia es la propia función 'fetchJobDetails'
 );
-
+    useEffect(() => {
+        checkExistingApplication();
+    }, [checkExistingApplication]);
     useEffect(() => {
         if (!jobDetails?.changa) {
             setReverseGeocodedAddress(null);
@@ -426,18 +538,17 @@ useFocusEffect(
         };
     }, [jobDetails?.changa?.direccion, coordinates?.latitude, coordinates?.longitude]);
 
-    const isContractor = viewMode === 'contratante';
-     const applicants = useMemo<PersonSummary[]>(() => {
+    const applicants = useMemo<PersonSummary[]>(() => {
         if (!jobDetails?.postulaciones) return [];
         return jobDetails.postulaciones
             .map((post) => toPersonSummary(post.usuario))
-            .filter((candidate): candidate is PersonSummary => Boolean(candidate?.id));
+             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
     }, [jobDetails?.postulaciones]);
 
     const assignedWorkers = useMemo(() => {
         if (!isContractor) return [];
 
-        const assignedIDs = jobDetails?.changa?.trabajadores || [];
+        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
         if (assignedIDs.length === 0) return [];
 
         return applicants.filter((a) => assignedIDs.includes(a.id));
@@ -497,7 +608,7 @@ useFocusEffect(
             key={w.id}
             style={styles.applicantCard}
             activeOpacity={0.85}
-            onPress={() => goToProfile(w.id)}
+            onPress={() => goToProfile(w.id, { changaId: jobDetails?.changa?.changaID })}
         >
             <View style={styles.applicantAvatar}>
                 <Text style={styles.applicantInitials}>{w.initials}</Text>
@@ -612,7 +723,7 @@ useFocusEffect(
 
                                         <TouchableOpacity
                                             style={styles.profileButton}
-                                            onPress={() => goToProfile(worker.id)}
+                                           onPress={() => goToProfile(worker.id, { changaId: jobDetails?.changa?.changaID })}
                                         >
                                             <Text style={styles.profileButtonText}>Ver perfil</Text>
                                         </TouchableOpacity>
@@ -724,9 +835,26 @@ useFocusEffect(
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <TouchableOpacity style={styles.actionButtonPrimary}>
-                        <Ionicons name="hand-right-outline" size={20} color={palette.white} />
-                        <Text style={styles.actionButtonTextPrimary}>Postularme</Text>
+                     <TouchableOpacity
+                        style={[
+                            styles.actionButtonPrimary,
+                            (hasApplied || isApplying || isCheckingApplication) && styles.actionButtonPrimaryDisabled,
+                        ]}
+                        disabled={hasApplied || isApplying || isCheckingApplication}
+                        onPress={handleApply}
+                    >
+                        {isApplying ? (
+                            <ActivityIndicator size="small" color={palette.white} />
+                        ) : (
+                            <Ionicons
+                                name={hasApplied ? 'checkmark-circle-outline' : 'hand-right-outline'}
+                                size={20}
+                                color={palette.white}
+                            />
+                        )}
+                        <Text style={styles.actionButtonTextPrimary}>
+                            {hasApplied ? 'Ya postulado' : 'Postularme'}
+                        </Text>
                     </TouchableOpacity>
                 )}
             </View>
@@ -810,6 +938,9 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.xs,
         borderRadius: RADIUS.md,
         fontWeight: '600',
+    },
+    actionButtonPrimaryDisabled: {
+        opacity: 0.7,
     },
 
     applicantCard: {

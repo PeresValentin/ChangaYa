@@ -23,6 +23,7 @@ export interface ProfileHeaderAction {
   onPress?: () => void;
   variant?: ActionVariant;
   rightAdornment?: ReactNode;
+  disabled?: boolean;
 }
 
 interface ProfileHeaderProps {
@@ -107,8 +108,10 @@ const ProfileHeader = ({
                 action.variant === "secondary"
                   ? styles.actionButtonSecondary
                   : styles.actionButtonPrimary,
+                  action.disabled && styles.actionButtonDisabled,
               ]}
-              onPress={action.onPress}
+              onPress={action.disabled ? undefined : action.onPress}
+              disabled={action.disabled}
               activeOpacity={0.85}
             >
               <Ionicons
@@ -222,6 +225,9 @@ const styles = StyleSheet.create({
     fontSize: FONT.sm,
     color: palette.muted,
     fontFamily: fontFamilies.rounded,
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
   },
   settingsButton: {
     width: 42,

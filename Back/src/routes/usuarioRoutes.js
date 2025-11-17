@@ -6,7 +6,8 @@ import {
   updateUsuario,
   deleteUsuario,
   loginUsuario,
-  verificarUsuario
+  verificarUsuario,
+  getUsuarioPublicProfile
 } from '../controllers/usuarioController.js'
 
 import { verificarToken } from '../middleware/authMiddleware.js'
@@ -20,6 +21,7 @@ router.get('/verificar', verificarUsuario)
 // Rutas protegidas (requieren token)
 router.get('/', verificarToken, getUsuarios)
 router.get('/:id', verificarToken, getUsuarioById)
+router.get('/public/:id', verificarToken, getUsuarioPublicProfile)
 router.put('/:id', verificarToken, updateUsuario)
 router.delete('/:id', verificarToken, deleteUsuario)
 
