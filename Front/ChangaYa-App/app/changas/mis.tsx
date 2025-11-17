@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
     SafeAreaView,
     ScrollView,
@@ -9,11 +9,16 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import axios from "axios";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+// ------------------ Types --------------------
 type JobStatus = 'abierta' | 'en_progreso' | 'finalizada';
 type JobSubStatus = 'pendiente_seleccion' | 'pocos_candidatos' | 'en_curso' | 'completada';
 
@@ -25,7 +30,7 @@ interface Changa {
     published?: string;
     dueDate?: string;
     status: JobStatus;
-    subStatus: JobSubStatus; 
+    subStatus: JobSubStatus;
     postulantes?: number;
     trabajador?: {
         name: string;
@@ -34,115 +39,65 @@ interface Changa {
     icon: keyof typeof Ionicons.glyphMap;
 }
 
-const MIS_CHANGAS: Changa[] = [
-    { 
-        id: 'plomero-1', 
-        title: 'Plomero - Baño Principal', 
-        price: '$12.000', 
-        published: 'Publicada hace 2 horas',
-        description: 'Reparar canilla que gotea',
-        status: 'abierta', 
-        subStatus: 'pendiente_seleccion', 
-        postulantes: 5, 
-        icon: 'build-outline' 
-    },
-    { 
-        id: 'limpieza-1', 
-        title: 'Limpieza Casa Completa', 
-        price: '$18.000', 
-        published: 'Publicada ayer',
-        description: '3 ambientes + cocina y baños',
-        status: 'abierta', 
-        subStatus: 'pocos_candidatos', 
-        postulantes: 2, 
-        icon: 'home-outline' 
-    },
-    { 
-        id: 'delivery-1', 
-        title: 'Delivery Zona Centro', 
-        price: '$8.000', 
-        dueDate: 'Comenzó hoy',
-        description: 'Entrega de paquetes oficina',
-        status: 'en_progreso', 
-        subStatus: 'en_curso', 
-        trabajador: { name: 'Carlos López', rating: 4.7 }, 
-        icon: 'cube-outline' 
-    },
-    { 
-        id: 'electricidad-1', 
-        title: 'Electricidad - Comedor', 
-        price: '$15.000', 
-        dueDate: 'Completada 10/09',
-        status: 'finalizada', 
-        subStatus: 'completada', 
-        trabajador: { name: 'Ana Martínez', rating: 5.0 }, 
-        icon: 'flash-outline' 
-    },
-];
+// ------------------ Mapper Backend → Front --------------------
+const mapChangaToFront = (c: any): Changa => {
+    const statusMap: Record<string, JobStatus> = {
+        iniciada: "abierta",
+        enProceso: "en_progreso",
+        finalizada: "finalizada"
+    };
 
-const summaryData = {
-    totalMes: 6,
-    calificacionPromedio: 4.8
+    const subStatusMap: Record<string, JobSubStatus> = {
+        iniciada: "pendiente_seleccion",
+        enProceso: "en_curso",
+        finalizada: "completada"
+    };
+
+    return {
+        id: c.changaID,
+        title: c.titulo,
+        description: c.descripcion,
+        price: `$${c.remuneracion}`,
+        status: statusMap[c.estado],
+        subStatus: subStatusMap[c.estado],
+        postulantes: Array.isArray(c.trabajadores) ? c.trabajadores.length : 0,
+        icon: "briefcase-outline"
+    };
 };
 
-const quickLinks: {
-  id: string;
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  route: Href;
-}[] = [
-  { id: "home", title: "Home", icon: "home-outline" as const, route: "/home/trabajador" as Href },
-  {
-    id: "chats",
-    title: "Chats",
-    icon: "chatbubble-ellipses-outline" as const,
-    route: "/chats" as Href,
-  },
-  {
-    id: "mis-changas",
-    title: "Mis Changas",
-    icon: "briefcase-outline" as const,
-    route: "/changas" as Href,
-  },
-  {
-    id: "perfil",
-    title: "Perfil",
-    icon: "person-circle-outline" as const,
-    route: "/profile" as Href,
-  },
-];
-
+// ------------------ Card --------------------
 const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
     const router = useRouter();
+
     const getStatusStyle = (subStatus: JobSubStatus) => {
         switch (subStatus) {
             case 'pendiente_seleccion': return styles.badgeOpen;
-            case 'pocos_candidatos': return styles.badgeOpenWarning; 
-            case 'completada': return styles.badgeCompleted; 
+            case 'pocos_candidatos': return styles.badgeOpenWarning;
+            case 'completada': return styles.badgeCompleted;
             default: return styles.badgeOpen;
         }
     };
-     const getStatusTextStyle = (subStatus: JobSubStatus) => {
+    const getStatusTextStyle = (subStatus: JobSubStatus) => {
         switch (subStatus) {
             case 'pendiente_seleccion': return styles.badgeTextOpen;
-            case 'pocos_candidatos': return styles.badgeTextOpen; 
+            case 'pocos_candidatos': return styles.badgeTextOpen;
             case 'en_curso': return styles.badgeTextProgress;
-            case 'completada': return styles.badgeTextCompleted; 
+            case 'completada': return styles.badgeTextCompleted;
             default: return styles.badgeTextOpen;
         }
     };
-    
+
     const getStatusText = (changa: Changa): string => {
-         if (changa.postulantes && changa.status === 'abierta') return `${changa.postulantes} postulantes`;
-         if (changa.subStatus === 'en_curso') return 'EN CURSO';
-         if (changa.subStatus === 'completada') return `Completada ${changa.dueDate?.split(' ')[1] || ''}`;
-         return '';
-    }
+        if (changa.postulantes && changa.status === 'abierta') return `${changa.postulantes} postulantes`;
+        if (changa.subStatus === 'en_curso') return 'EN CURSO';
+        if (changa.subStatus === 'completada') return 'Completada';
+        return '';
+    };
 
     return (
-        <TouchableOpacity 
-            style={styles.card} 
-            onPress={() => router.push({ pathname: "/changas/[id]", params: { id: changa.id, viewMode: 'contratante' } })}
+        <TouchableOpacity
+            style={styles.card}
+            onPress={() => router.push({ pathname: "/changas/[id]", params: { id: changa.id } })}
         >
             <View style={styles.cardHeader}>
                 <View style={styles.cardIconWrapper}>
@@ -150,181 +105,174 @@ const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
                 </View>
                 <View style={styles.cardHeaderText}>
                     <Text style={styles.cardTitle}>{changa.title}</Text>
-                     {changa.description && <Text style={styles.cardDescription}>{changa.description}</Text>}
+                    {changa.description && <Text style={styles.cardDescription}>{changa.description}</Text>}
                 </View>
-                 <View style={[styles.badgeBase, getStatusStyle(changa.subStatus)]}>
-                      <Text style={[styles.badgeTextBase, getStatusTextStyle(changa.subStatus)]}>
-                          {getStatusText(changa)}
-                      </Text>
-                 </View>
+                <View style={[styles.badgeBase, getStatusStyle(changa.subStatus)]}>
+                    <Text style={[styles.badgeTextBase, getStatusTextStyle(changa.subStatus)]}>
+                        {getStatusText(changa)}
+                    </Text>
+                </View>
             </View>
-            {(changa.price || changa.published || changa.dueDate || changa.trabajador) && <View style={styles.separator} />}
-
-            <View style={styles.cardFooter}>
-                    <View style={styles.metaRow}>
-                        {changa.price && <><Ionicons name="cash-outline" size={16} color={palette.muted} /><Text style={styles.metaText}>{changa.price}</Text></>}
-                        {changa.published && <><Ionicons name="time-outline" size={16} color={palette.muted} style={{ marginLeft: SPACING.sm }} /><Text style={styles.metaText}>{changa.published}</Text></>}
-                        {changa.dueDate && changa.status !== 'finalizada' && <><Ionicons name="time-outline" size={16} color={palette.muted} style={{ marginLeft: SPACING.sm }} /><Text style={styles.metaText}>{changa.dueDate}</Text></>}
-                    </View>
-                    {changa.status === 'abierta' && changa.subStatus === 'pendiente_seleccion' && <Text style={styles.metaStateText}>Estado: Esperando tu elección</Text>}
-                    {changa.status === 'abierta' && changa.subStatus === 'pocos_candidatos' && <Text style={styles.metaStateTextWarning}>Estado: Pocos candidatos</Text>}
-                    {changa.trabajador && (
-                        <View style={styles.metaRow}>
-                            <Text style={styles.metaText}>Trabajador: {changa.trabajador.name}</Text>
-                            {changa.trabajador.rating && <>
-                                <Ionicons name="star" size={14} color="#FFC107" style={{ marginLeft: 4 }} />
-                                <Text style={styles.metaTextBold}>{changa.trabajador.rating}</Text>
-                            </>}
-                        </View>
-                    )}
-                </View>
-            </TouchableOpacity>
+        </TouchableOpacity>
     );
 };
 
-
+// ------------------ Main Screen --------------------
 export default function MisChangasScreen() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
+    const router = useRouter();
+    const pathname = usePathname();
 
-  const filteredChangas = useMemo(() => {
-      return MIS_CHANGAS.filter(changa => changa.status === activeFilter);
-  }, [activeFilter]);
-  
-  const changasPendientes = useMemo(() => filteredChangas.filter(c => c.subStatus === 'pendiente_seleccion' || c.subStatus === 'pocos_candidatos'), [filteredChangas]);
-  const changasEnProgreso = useMemo(() => filteredChangas.filter(c => c.subStatus === 'en_curso'), [filteredChangas]);
-  const changasFinalizadas = useMemo(() => MIS_CHANGAS.filter(c => c.status === 'finalizada'), []);
-  
-  const countPendientes = MIS_CHANGAS.filter(c => c.status === 'abierta').length;
-  const countEnProgreso = MIS_CHANGAS.filter(c => c.status === 'en_progreso').length;
-  const countFinalizadas = MIS_CHANGAS.filter(c => c.status === 'finalizada').length;
+    const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-        <Stack.Screen 
-            options={{ 
-                title: 'Mis Changas',
-                headerTitleAlign: 'center',
-                headerShadowVisible: false,
-                headerRight: () => (
-                    <TouchableOpacity 
-                        style={{ marginRight: SPACING.md }}
-                        onPress={() => router.push('/changas/nueva')}
-                    >
-                        <Ionicons name="add-circle-outline" size={28} color={palette.tint} />
-                    </TouchableOpacity>
-                ),
-            }} 
-        />
-      <View style={styles.container}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-        >
-            <View style={styles.filterContainer}>
-                <TouchableOpacity 
-                    style={[styles.filterButton, activeFilter === 'abierta' && styles.filterButtonActive]}
-                    onPress={() => setActiveFilter('abierta')}
-                >
-                    <Text style={[styles.filterText, activeFilter === 'abierta' && styles.filterTextActive]}>Abiertas</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.filterButton, activeFilter === 'en_progreso' && styles.filterButtonActive]}
-                    onPress={() => setActiveFilter('en_progreso')}
-                >
-                     <Text style={[styles.filterText, activeFilter === 'en_progreso' && styles.filterTextActive]}>En Progreso</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.filterButton, activeFilter === 'finalizada' && styles.filterButtonActive]}
-                    onPress={() => setActiveFilter('finalizada')}
-                >
-                     <Text style={[styles.filterText, activeFilter === 'finalizada' && styles.filterTextActive]}>Finalizadas</Text>
-                </TouchableOpacity>
-            </View>
+    const [changasAbiertas, setChangasAbiertas] = useState<Changa[]>([]);
+    const [changasEnProgreso, setChangasEnProgreso] = useState<Changa[]>([]);
+    const [changasFinalizadas, setChangasFinalizadas] = useState<Changa[]>([]);
+    const [loading, setLoading] = useState(true);
 
-            
-            {activeFilter === 'abierta' && changasPendientes.length > 0 && (
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>Pendientes de selección ({countPendientes})</Text>
-                    <View style={styles.cardList}>
-                        {changasPendientes.map(changa => <ChangaCard key={changa.id} changa={changa} />)}
+    // ---- Fetch Data from Backend ----
+    const loadChangas = async () => {
+        try {
+            setLoading(true);
+            const token = await AsyncStorage.getItem("jwtToken");
+            const headers = { Authorization: `Bearer ${token}` };
+
+            // Abiertas
+            const abiertasRes = await axios.get(`${API_URL}/api/changas/abiertas`, { headers });
+            setChangasAbiertas(abiertasRes.data.map(mapChangaToFront));
+
+            // En Proceso
+            const enProcesoRes = await axios.get(`${API_URL}/api/changas/enProceso`, { headers });
+            setChangasEnProgreso(enProcesoRes.data.map(mapChangaToFront));
+
+            // Finalizadas
+            const finalizadasRes = await axios.get(`${API_URL}/api/changas/finalizadas`, { headers });
+            setChangasFinalizadas(finalizadasRes.data.map(mapChangaToFront));
+
+        } catch (err) {
+            console.error("❌ Error cargando changas:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadChangas();
+    }, []);
+
+    const filteredChangas = useMemo(() => {
+        if (activeFilter === 'abierta') return changasAbiertas;
+        if (activeFilter === 'en_progreso') return changasEnProgreso;
+        if (activeFilter === 'finalizada') return changasFinalizadas;
+        return [];
+    }, [activeFilter, changasAbiertas, changasEnProgreso, changasFinalizadas]);
+
+    const countPendientes = changasAbiertas.length;
+    const countEnProgreso = changasEnProgreso.length;
+    const countFinalizadas = changasFinalizadas.length;
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <Stack.Screen
+                options={{
+                    title: 'Mis Changas',
+                    headerTitleAlign: 'center',
+                    headerShadowVisible: false,
+                    headerRight: () => (
+                        <TouchableOpacity
+                            style={{ marginRight: SPACING.md }}
+                            onPress={() => router.push('/changas/nueva')}
+                        >
+                            <Ionicons name="add-circle-outline" size={28} color={palette.tint} />
+                        </TouchableOpacity>
+                    ),
+                }}
+            />
+
+            <View style={styles.container}>
+                <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+
+                    {/* ---- Filtros ---- */}
+                    <View style={styles.filterContainer}>
+                        <TouchableOpacity
+                            style={[styles.filterButton, activeFilter === 'abierta' && styles.filterButtonActive]}
+                            onPress={() => setActiveFilter('abierta')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'abierta' && styles.filterTextActive]}>
+                                Abiertas
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.filterButton, activeFilter === 'en_progreso' && styles.filterButtonActive]}
+                            onPress={() => setActiveFilter('en_progreso')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'en_progreso' && styles.filterTextActive]}>
+                                En Progreso
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.filterButton, activeFilter === 'finalizada' && styles.filterButtonActive]}
+                            onPress={() => setActiveFilter('finalizada')}
+                        >
+                            <Text style={[styles.filterText, activeFilter === 'finalizada' && styles.filterTextActive]}>
+                                Finalizadas
+                            </Text>
+                        </TouchableOpacity>
                     </View>
-                </View>
-            )}
 
-             {activeFilter === 'en_progreso' && changasEnProgreso.length > 0 && (
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>En progreso ({countEnProgreso})</Text>
-                    <View style={styles.cardList}>
-                        {changasEnProgreso.map(changa => <ChangaCard key={changa.id} changa={changa} />)}
-                    </View>
-                </View>
-            )}
+                    {/* ---- Listas ---- */}
 
-             {activeFilter === 'finalizada' && changasFinalizadas.length > 0 && (
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>Finalizadas ({countFinalizadas})</Text>
-                    <View style={styles.cardList}>
-                        {changasFinalizadas.slice(0, 1).map(changa => <ChangaCard key={changa.id} changa={changa} />)}
-                    </View>
-                    {countFinalizadas > 1 && (
-                         <TouchableOpacity style={styles.viewAllButton}>
-                             <Text style={styles.viewAllButtonText}>Ver todas las finalizadas ({countFinalizadas})</Text>
-                         </TouchableOpacity>
+                    {activeFilter === 'abierta' && (
+                        <View style={styles.sectionContainer}>
+                            <Text style={styles.sectionTitle}>
+                                Pendientes de selección ({countPendientes})
+                            </Text>
+                            <View style={styles.cardList}>
+                                {changasAbiertas.map(changa => (
+                                    <ChangaCard key={changa.id} changa={changa} />
+                                ))}
+                            </View>
+                        </View>
                     )}
-                </View>
-            )}
-            
-            {filteredChangas.length === 0 && activeFilter !== 'finalizada' && (
-                 <Text style={styles.noJobsText}>No tienes changas en estado "{activeFilter.replace('_', ' ')}".</Text>
-            )}
 
-            <View style={styles.summaryFooterCard}>
-                 <Ionicons name="stats-chart-outline" size={20} color={palette.white} />
-                 <Text style={styles.summaryFooterText}>
-                     Resumen: {summaryData.totalMes} changas este mes
-                 </Text>
-                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                    <Ionicons name="star" size={16} color="#FFC107" />
-                    <Text style={styles.summaryFooterRating}>{summaryData.calificacionPromedio}</Text>
-                 </View>
+                    {activeFilter === 'en_progreso' && (
+                        <View style={styles.sectionContainer}>
+                            <Text style={styles.sectionTitle}>
+                                En progreso ({countEnProgreso})
+                            </Text>
+                            <View style={styles.cardList}>
+                                {changasEnProgreso.map(changa => (
+                                    <ChangaCard key={changa.id} changa={changa} />
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {activeFilter === 'finalizada' && (
+                        <View style={styles.sectionContainer}>
+                            <Text style={styles.sectionTitle}>
+                                Finalizadas ({countFinalizadas})
+                            </Text>
+                            <View style={styles.cardList}>
+                                {changasFinalizadas.map(changa => (
+                                    <ChangaCard key={changa.id} changa={changa} />
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* ---- Sin resultados ---- */}
+                    {filteredChangas.length === 0 && (
+                        <Text style={styles.noJobsText}>
+                            No tienes changas en estado "{activeFilter.replace('_', ' ')}".
+                        </Text>
+                    )}
+
+                </ScrollView>
             </View>
-
-        </ScrollView>
-
-        <View style={styles.bottomNav}>
-          {quickLinks.map((item) => {
-            const routePath =
-              typeof item.route === "string"
-                ? item.route
-                : (item.route as any)?.pathname ?? String(item.route);
-            const isHomeActive = item.id === "home" && (pathname === "/home/trabajador" || pathname.startsWith("/home/contratante"));
-            const isMisChangasActive = item.id === "mis-changas" && pathname.startsWith('/changas');
-            const isActive = isHomeActive || isMisChangasActive || (item.id !== "home" && item.id !== "mis-changas" && (pathname === routePath || pathname.startsWith(`${routePath}/`)));
-            
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => router.push(item.id === 'home' ? ('/home/contratante' as Href) : item.route)} 
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={22}
-                  color={isActive ? palette.tint : palette.icon}
-                />
-                <Text style={[styles.navText, isActive && styles.navTextActive]}>
-                  {item.title}
-                </Text>
-                {isActive ? <View style={styles.activeIndicator} /> : null}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    </SafeAreaView>
-  );
+        </SafeAreaView>
+    );
 }
 
 const styles = StyleSheet.create({
