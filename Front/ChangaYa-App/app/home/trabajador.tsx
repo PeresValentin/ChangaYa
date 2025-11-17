@@ -80,9 +80,9 @@ const quickLinks: {
   },
   {
     id: "mis-changas",
-    title: "Favoritas",
-    icon: "heart-outline" as const,
-    route: "/changas/favoritas" as Href,
+    title: "Mis Changas",
+    icon: "briefcase-outline" as const,
+    route: "/changas/mis" as Href,
   },
   {
     id: "perfil",
