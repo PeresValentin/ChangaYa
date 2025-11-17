@@ -1,4 +1,7 @@
 import { supabase } from '../config/supabaseClient.js'
+import {
+  finalizarChangaService,
+} from "../services/changaService.js";
 
 const WORKER_ID_ALIASES = [
   'trabajadorID',
