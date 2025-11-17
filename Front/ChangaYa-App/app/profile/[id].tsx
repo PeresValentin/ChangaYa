@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 
-import ProfileHeader from "../../components/profile/ProfileHeader";
+import ProfileHeader, { type ProfileHeaderAction } from "../../components/profile/ProfileHeader";
 import SkillsList, {
   type SkillItem,
 } from "../../components/profile/SkillsList";
@@ -165,6 +165,7 @@ const PerfilPublicoScreen = () => {
   const profileId = Array.isArray(rawId) ? rawId[0] : rawId;
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const changaId = Array.isArray(rawChangaId) ? rawChangaId[0] : rawChangaId;
+  const router = useRouter();
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,6 +174,7 @@ const PerfilPublicoScreen = () => {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAssignedHere, setIsAssignedHere] = useState(false);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
 
   useEffect(() => {
     const loadViewerData = async () => {
@@ -280,17 +282,105 @@ const PerfilPublicoScreen = () => {
 
   const normalizedViewerRole = viewerRole ? viewerRole.toLowerCase() : null;
   const normalizedProfileRole = profile?.role ? profile.role.toLowerCase() : null;
+  const isViewerContratante = normalizedViewerRole === "contratante";
+  const isViewerTrabajador = normalizedViewerRole === "trabajador";
+  const isProfileTrabajador = normalizedProfileRole === "trabajador";
+  const isProfileContratante = normalizedProfileRole === "contratante";
   const isOwnProfile = Boolean(profile && viewerId && profile.id === viewerId);
   const canHire = Boolean(
     changaId &&
-      normalizedViewerRole === "contratante" &&
-      normalizedProfileRole === "trabajador" &&
+      isViewerContratante &&
+      isProfileTrabajador &&
       !isOwnProfile,
   );
+   const canMessage = Boolean(
+    profile &&
+      viewerId &&
+      profile.id !== viewerId &&
+      ((isViewerContratante && isProfileTrabajador) ||
+        (isViewerTrabajador && isProfileContratante)),
+  );
+  const handleMessagePress = useCallback(async () => {
+    if (!canMessage || !profile) return;
 
-  const handleMessagePress = useCallback(() => {
-    Alert.alert("Próximamente", "Muy pronto vas a poder chatear desde esta sección.");
-  }, []);
+    if (!API_URL) {
+      Alert.alert("Configuración incompleta", "No encontramos la URL de la API.");
+      return;
+    }
+
+    try {
+      setIsOpeningChat(true);
+      const token = await AsyncStorage.getItem("jwtToken");
+      if (!token) {
+        Alert.alert("Sesión expirada", "Iniciá sesión nuevamente para continuar.");
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${token}` };
+      const chatsResponse = await axios.get(`${API_URL}/api/chats/mine`, {
+        headers,
+      });
+
+      const chats: any[] = Array.isArray(chatsResponse.data) ? chatsResponse.data : [];
+      const findOtherUserId = (chatUser?: ApiUser | null) => {
+        if (!chatUser) return null;
+        return (
+          chatUser.usuarioID ??
+          chatUser.usuarioId ??
+          chatUser.id ??
+          chatUser._id ??
+          chatUser.userId ??
+          null
+        );
+      };
+
+      const existingChat = chats.find((chat) => {
+        const otherUserId = findOtherUserId(chat?.otroUsuario);
+        return otherUserId && String(otherUserId) === profile.id;
+      });
+
+      const navigateToChat = (chatId: string) => {
+        router.push({ pathname: "/chats/[id]", params: { id: chatId } });
+      };
+
+      if (existingChat?.chatID) {
+        navigateToChat(String(existingChat.chatID));
+        return;
+      }
+
+      if (!isViewerContratante) {
+        Alert.alert(
+          "Chat no disponible",
+          "Todavía no tenés un chat abierto con esta persona. Pedile que te envíe un mensaje.",
+        );
+        return;
+      }
+
+      const createResponse = await axios.post(
+        `${API_URL}/api/chats`,
+        { usuario2: profile.id },
+        { headers },
+      );
+
+      const createdChat = createResponse.data;
+      const createdChatId = createdChat?.chatID ?? createdChat?.chatId ?? createdChat?.id;
+
+      if (createdChatId) {
+        navigateToChat(String(createdChatId));
+        return;
+      }
+
+      Alert.alert("Error", "No pudimos abrir el chat. Intentá nuevamente.");
+    } catch (messageError: any) {
+      console.error("Error al abrir chat", messageError?.response?.data || messageError);
+      const backendMessage = messageError?.response?.data?.error
+        ? String(messageError.response.data.error)
+        : "No pudimos abrir el chat. Intentá nuevamente.";
+      Alert.alert("Error", backendMessage);
+    } finally {
+      setIsOpeningChat(false);
+    }
+  }, [API_URL, canMessage, isViewerContratante, profile, router]);
 
   const performAssignment = useCallback(async () => {
     if (!canHire || !profile || !changaId) return;
@@ -342,27 +432,37 @@ const PerfilPublicoScreen = () => {
   }, [canHire, performAssignment, profile]);
 
   const headerActions = useMemo(() => {
-    if (!canHire) return undefined;
+    const actions: ProfileHeaderAction[] = [];
 
-    return [
-      {
-        label: "Mensaje",
+    if (canMessage) {
+      const isPrimaryOnlyAction = !canHire;
+      actions.push({
+        label: isOpeningChat ? "Abriendo..." : "Mensaje",
         icon: "chatbubble-ellipses-outline",
-        variant: "secondary" as const,
-        onPress: handleMessagePress,
-      },
-      {
+        variant: isPrimaryOnlyAction ? ("primary" as const) : ("secondary" as const),
+        onPress: isOpeningChat ? undefined : handleMessagePress,
+        disabled: isOpeningChat,
+        rightAdornment: isOpeningChat ? (
+          <ActivityIndicator size="small" color={isPrimaryOnlyAction ? palette.white : palette.tint} style={{ marginLeft: 6 }} />
+        ) : undefined,
+      });
+    }
+
+    if (canHire) {
+      actions.push({
         label: isAssignedHere ? "Asignado" : isAssigning ? "Contratando..." : "Contratar",
-        icon: "briefcase-outline" as const,
-        variant: "primary" as const,
+        icon: "briefcase-outline",
+        variant: "primary",
         onPress: isAssignedHere ? undefined : handleHirePress,
         disabled: isAssigning || isAssignedHere,
         rightAdornment: isAssigning ? (
           <ActivityIndicator size="small" color={palette.white} style={{ marginLeft: 6 }} />
         ) : undefined,
-      },
-    ];
-  }, [canHire, handleHirePress, handleMessagePress, isAssignedHere, isAssigning]);
+      });
+    }
+
+    return actions.length > 0 ? actions : undefined;
+  }, [canHire, canMessage, handleHirePress, handleMessagePress, isAssignedHere, isAssigning, isOpeningChat]);
 
 
   if (isLoading) {
@@ -415,6 +515,7 @@ const PerfilPublicoScreen = () => {
           rating={profile.rating}
           completedJobs={profile.completedJobs}
           avatarInitials={initials}
+          actions={headerActions}
           
         />
 
