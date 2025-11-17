@@ -123,6 +123,24 @@ const PerfilPrivadoScreen = () => {
     return Math.round(Math.min(1, Math.max(0, baseScore)) * 100);
   }, [profile]);
 
+  const accountInfo = useMemo(() => {
+    if (!profile) return [];
+
+    const info = [
+      { label: "Rol en ChangaYa", value: profile.role ?? "Sin especificar" },
+      { label: "Correo electrónico", value: profile.email ?? "Email no disponible" },
+      { label: "Teléfono", value: profile.phone ?? "No informado" },
+      { label: "Ubicación", value: profile.location || "Ubicación sin especificar" },
+    ];
+
+    if (typeof profile.completedJobs === "number") {
+      info.push({ label: "Changas completadas", value: `${profile.completedJobs}` });
+    }
+
+    return info;
+  }, [profile]);
+
+
   const hasSkills = (profile?.topSkills?.length ?? 0) > 0;
   const hasReviews = (profile?.reviews?.length ?? 0) > 0;
 
@@ -174,6 +192,18 @@ const PerfilPrivadoScreen = () => {
           showSettings
           onSettingsPress={() => router.push("/profile/settings")}
         />
+        
+         <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Información de tu cuenta</Text>
+          <View style={styles.infoList}>
+            {accountInfo.map((item) => (
+              <View key={item.label} style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{item.label}</Text>
+                <Text style={styles.infoValue}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <View style={styles.sectionCard}>
            <View style={[styles.progressFill, { width: `${generalScorePercent}%` }]} />
@@ -264,6 +294,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACING.sm,
   },
+
+  infoList: {
+    gap: SPACING.xs,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  infoLabel: {
+    fontSize: FONT.sm,
+    color: palette.muted,
+    fontFamily: fontFamilies.rounded,
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: FONT.md,
+    color: palette.text,
+    fontFamily: fontFamilies.rounded,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+  },
+
   sectionTitle: {
     fontSize: FONT.lg,
     color: palette.text,

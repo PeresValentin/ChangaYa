@@ -15,10 +15,19 @@ export type ApiUser = {
   nombre?: string | null;
   apellido?: string | null;
   nombreUsuario?: string | null;
+  nombreCompleto?: string | null;
   ubicacion?: string | null;
   direccion?: string | null;
   ciudad?: string | null;
   provincia?: string | null;
+  email?: string | null;
+  correo?: string | null;
+  correoElectronico?: string | null;
+  mail?: string | null;
+  telefono?: string | number | null;
+  telefono1?: string | number | null;
+  celular?: string | number | null;
+  phone?: string | number | null;
   descripcion?: string | null;
   sobreMi?: string | null;
   habilidades?: string[] | string | null;
@@ -35,6 +44,8 @@ export type PublicProfile = {
   completedJobs?: number;
   role?: string | null;
   generalScore?: number | null;
+  email?: string | null;
+  phone?: string | null;
   about: string;
   topSkills: SkillItem[];
   reviews: ReviewItemProps[];
@@ -54,7 +65,11 @@ export const buildDisplayName = (user: ApiUser) => {
       .join(" ")
       .trim();
 
-  const candidates = [composed, sanitizeText(user.nombreUsuario)];
+  const candidates = [
+    sanitizeText(user.nombreCompleto),
+    composed,
+    sanitizeText(user.nombreUsuario),
+  ];
   const valid = candidates.find((candidate) => Boolean(candidate));
   return valid || "Usuario";
 };
@@ -89,6 +104,21 @@ export const parseSkills = (skills: ApiUser["habilidades"]): SkillItem[] => {
     level: Math.max(0.3, 1 - index * 0.15),
   }));
 };
+export const buildEmail = (user: ApiUser) => {
+  const candidates = [user.email, user.correoElectronico, user.correo, user.mail]
+    .map((candidate) => sanitizeText(candidate as string | null))
+    .filter(Boolean);
+
+  return candidates[0] || null;
+};
+
+export const buildPhone = (user: ApiUser) => {
+  const candidates = [user.telefono, user.telefono1, user.celular, user.phone]
+    .map((candidate) => (candidate != null ? String(candidate).trim() : ""))
+    .filter(Boolean);
+
+  return candidates[0] || null;
+};
 
 export const mapUserToPublicProfile = (
   user: ApiUser,
@@ -121,6 +151,8 @@ export const mapUserToPublicProfile = (
     role: user.tipoUsuario ?? null,
     completedJobs,
     generalScore: normalizedScore,
+     email: buildEmail(user),
+    phone: buildPhone(user),
     about: aboutText,
     topSkills: parseSkills(user.habilidades),
     reviews: [],

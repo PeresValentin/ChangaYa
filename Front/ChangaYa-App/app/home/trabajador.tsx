@@ -88,7 +88,7 @@ const quickLinks: {
     id: "perfil",
     title: "Perfil",
     icon: "person-circle-outline" as const,
-    route: "/perfil" as Href,
+     route: "/profile" as Href,
   },
 ];
 export default function InicioTrabajadorScreen() {

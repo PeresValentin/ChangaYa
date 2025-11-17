@@ -118,7 +118,7 @@ const quickLinks: {
     title: "Perfil",
     icon: "person-circle-outline" as const,
 
-    route: "/perfil" as Href,
+     route: "/profile" as Href,
 
   },
 ];
@@ -253,9 +253,15 @@ useFocusEffect(
               </View>
               <Text style={styles.subtitle}>Gestiona tus changas</Text>
             </View>
-            <View style={styles.avatar}>
+            <TouchableOpacity
+              style={styles.avatar}
+              onPress={() => goToProfile()}
+              activeOpacity={0.85}
+              accessibilityLabel="Ir a mi perfil"
+              accessibilityRole="button"
+            >
               <Text style={styles.avatarInitial}>{initials}</Text>
-            </View>
+            </TouchableOpacity>
           </View>
           {/* REFACTOR: Botón "Crear Nueva Changa" */}
           <TouchableOpacity
