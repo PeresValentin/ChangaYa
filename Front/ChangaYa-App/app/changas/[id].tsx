@@ -308,7 +308,24 @@ const JobDetailsScreen = () => {
     const { goToProfile } = useProfileNavigation();
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
     const router = useRouter();
-    const isContractor = viewMode === 'contratante';    
+
+    // Rol real del usuario autenticado (trabajador / contratante)
+    const [userRole, setUserRole] = useState<"trabajador" | "contratante" | null>(null);
+
+    // Computa el rol REAL del usuario actual
+    const isContractor = useMemo(() => {
+
+        // 1. Si viewMode vino de navegación, lo respetamos
+        if (viewMode === "contratante") return true;
+        if (viewMode === "trabajador") return false;
+
+        // 2. Sino, usamos el rol real del usuario
+        if (userRole === "contratante") return true;
+        if (userRole === "trabajador") return false;
+
+        // Fallback seguro para evitar crashes
+        return false;
+    }, [viewMode, userRole]);   
 
     const [jobDetails, setJobDetails] = useState<JobDetailsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -345,6 +362,30 @@ const JobDetailsScreen = () => {
 
         loadUserData();
     }, []);
+
+    useEffect(() => {
+        const loadUserRole = async () => {
+            try {
+                const storedUser = await AsyncStorage.getItem("userData");
+                if (!storedUser) return;
+
+                const parsed = JSON.parse(storedUser);
+                const normalized = (parsed?.rol || parsed?.tipoUsuario || "").toLowerCase().trim();
+
+                // Normalizamos el rol
+                if (normalized.includes("trab")) {
+                    setUserRole("trabajador");
+                } else {
+                    setUserRole("contratante");
+                }
+            } catch (e) {
+                console.error("Error cargando rol del usuario", e);
+            }
+        };
+
+        loadUserRole();
+    }, []);
+
 
     const checkExistingApplication = useCallback(async () => {
         if (isContractor || !id || !currentUserId) return;
@@ -469,8 +510,11 @@ useFocusEffect(
   }, [fetchJobDetails]) // La dependencia es la propia función 'fetchJobDetails'
 );
     useEffect(() => {
-        checkExistingApplication();
-    }, [checkExistingApplication]);
+        if (!isContractor) {
+            checkExistingApplication();
+        }
+    }, [isContractor, checkExistingApplication]);
+
     useEffect(() => {
         if (!jobDetails?.changa) {
             setReverseGeocodedAddress(null);
