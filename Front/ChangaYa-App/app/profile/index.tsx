@@ -1,112 +1,212 @@
-
-
-import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { Stack, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
 import ReviewItem from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
-import { useProfileNavigation } from "@/hooks/use-profile-navigation";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  buildInitials,
+  mapUserToPublicProfile,
+  type ApiPerfil,
+  type ApiUser,
+  type PublicProfile,
+} from "./profile-utils";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
 
-const USER_PROFILE = {
-  id: "worker-001", // añadido para coherencia con los perfiles públicos mockeados
-  name: "Rafael Eguren",
-  location: "La Plata, Buenos Aires",
-  rating: 4.8,
-  completedJobs: 132,
-  generalScore: 0.92,
-  about:
-    "Amante de las soluciones prácticas y prolijas. Busco que cada cliente sienta tranquilidad sabiendo que su hogar está en buenas manos.",
-  topSkills: [
-    { id: "skill-plomeria", label: "Plomería", level: 0.97, color: "#6BA368" },
-    { id: "skill-gas", label: "Instalaciones de gas", level: 0.9, color: "#A1E99D" },
-    { id: "skill-electricidad", label: "Electricidad", level: 0.86, color: "#CFE6CD" },
-    { id: "skill-pintura", label: "Pintura", level: 0.78, color: "#90C99F" },
-    { id: "skill-mantenimiento", label: "Mantenimiento general", level: 0.74, color: "#B7E4C7" },
-  ],
-  reviews: [
-    {
-      id: "review-1",
-      title: "Reparación de caño en cocina",
-      contractor: "Carlos Pérez",
-      date: "12 de marzo 2024",
-      rating: 4.9,
-      description:
-        "María llegó en menos de una hora y solucionó el problema sin inconvenientes. Además dejó todo impecable y me explicó cómo evitar que vuelva a suceder.",
-    },
-    {
-      id: "review-2",
-      title: "Instalación de termotanque",
-      contractor: "Lorena Díaz",
-      date: "28 de febrero 2024",
-      rating: 4.7,
-      description:
-        "Excelente trabajo, muy cuidadosa con los detalles y cumplió con los tiempos acordados.",
-    },
-  ],
-};
+
 
 
 const PerfilPrivadoScreen = () => {
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const router = useRouter();
-  const initials = USER_PROFILE.name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
+  
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const generalScorePercent = Math.round(
-    Math.min(1, Math.max(0, USER_PROFILE.generalScore)) * 100
-  );
+  const loadProfile = useCallback(async () => {
+    if (!API_URL) {
+      setErrorMessage("La aplicación no tiene configurada la URL de la API.");
+      setIsLoading(false);
+      return;
+    }
 
-  const { currentUserId } = useProfileNavigation();
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <Stack.Screen
-        options={{
-          title: "Mi Perfil",
-          headerTitleAlign: "center",
-          headerShadowVisible: false,
-        }}
-      />
+      const storedUser = await AsyncStorage.getItem("userData");
+      if (!storedUser) {
+        setErrorMessage("No encontramos los datos del usuario logueado.");
+        return;
+      }
+
+      const parsedUser = JSON.parse(storedUser);
+      const extractedId =
+        parsedUser?.usuarioID ??
+        parsedUser?.usuarioId ??
+        parsedUser?.id ??
+        parsedUser?._id ??
+        parsedUser?.userId;
+
+      if (!extractedId) {
+        setErrorMessage("No pudimos identificar tu usuario.");
+        return;
+      }
+
+      const token = await AsyncStorage.getItem("jwtToken");
+      if (!token) {
+        setErrorMessage("Tu sesión expiró. Iniciá sesión nuevamente.");
+        router.replace("/auth/login");
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${token}` };
+      const userResponse = await axios.get<ApiUser>(`${API_URL}/api/usuarios/${extractedId}`, {
+        headers,
+      });
+
+      let perfilData: ApiPerfil | null = null;
+      try {
+        const perfilResponse = await axios.get<ApiPerfil>(`${API_URL}/api/perfil/usuario/${extractedId}`, {
+          headers,
+        });
+        perfilData = perfilResponse.data;
+      } catch (perfilError: any) {
+        if (perfilError?.response?.status !== 404) {
+          console.warn("No pudimos obtener el perfil extendido", perfilError?.response?.data || perfilError);
+        }
+      }
+
+      const mappedProfile = mapUserToPublicProfile(userResponse.data, perfilData, String(extractedId));
+      setProfile(mappedProfile);
+    } catch (error: any) {
+      console.error("Error al cargar el perfil privado", error?.response?.data || error);
+      const backendMessage =
+        typeof error?.response?.data?.error === "string"
+          ? error.response.data.error
+          : "No pudimos cargar tu perfil.";
+      setErrorMessage(backendMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [API_URL, router]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const initials = buildInitials(profile?.name ?? "");
+  const generalScorePercent = useMemo(() => {
+    if (!profile) return 0;
+    const baseScore =
+      profile.generalScore != null
+        ? profile.generalScore
+        : profile.rating > 0
+        ? Math.min(1, profile.rating / 5)
+        : 0;
+    return Math.round(Math.min(1, Math.max(0, baseScore)) * 100);
+  }, [profile]);
+
+  const accountInfo = useMemo(() => {
+    if (!profile) return [];
+
+    const info = [
+      { label: "Rol en ChangaYa", value: profile.role ?? "Sin especificar" },
+      { label: "Correo electrónico", value: profile.email ?? "Email no disponible" },
+      { label: "Teléfono", value: profile.phone ?? "No informado" },
+      { label: "Ubicación", value: profile.location || "Ubicación sin especificar" },
+    ];
+
+    if (typeof profile.completedJobs === "number") {
+      info.push({ label: "Changas completadas", value: `${profile.completedJobs}` });
+    }
+
+    return info;
+  }, [profile]);
+
+
+  const hasSkills = (profile?.topSkills?.length ?? 0) > 0;
+  const hasReviews = (profile?.reviews?.length ?? 0) > 0;
+
+  const renderState = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color={palette.tint} />
+          <Text style={styles.stateMessage}>Cargando tu perfil...</Text>
+        </View>
+      );
+    }
+
+    if (errorMessage) {
+      return (
+        <View style={styles.stateContainer}>
+          <Text style={styles.stateTitle}>No pudimos cargar tu perfil</Text>
+          <Text style={styles.stateMessage}>{errorMessage}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (!profile) {
+      return (
+        <View style={styles.stateContainer}>
+          <Text style={styles.stateTitle}>Tu perfil aún no está disponible.</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+            <Text style={styles.retryButtonText}>Actualizar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <ProfileHeader
-          name={USER_PROFILE.name}
-          location={USER_PROFILE.location}
-          rating={USER_PROFILE.rating}
-          completedJobs={USER_PROFILE.completedJobs}
+          name={profile.name}
+          location={profile.location}
+          rating={profile.rating}
+          completedJobs={profile.completedJobs}
           avatarInitials={initials}
           showSettings
-          onSettingsPress={() => router.push("/profile/settings")}   
+          onSettingsPress={() => router.push("/profile/settings")}
         />
+        
+         <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Información de tu cuenta</Text>
+          <View style={styles.infoList}>
+            {accountInfo.map((item) => (
+              <View key={item.label} style={styles.infoRow}>
+                <Text style={styles.infoLabel}>{item.label}</Text>
+                <Text style={styles.infoValue}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Puntuación general</Text>
-            <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
-          </View>
+           <View style={[styles.progressFill, { width: `${generalScorePercent}%` }]} />
           <View style={styles.progressTrack}>
             <View
               style={[
@@ -120,22 +220,46 @@ const PerfilPrivadoScreen = () => {
           </Text>
         </View>
 
-        <SkillsList title="Top 5 habilidades" skills={USER_PROFILE.topSkills} />
+         {hasSkills ? (
+          <SkillsList title="Top 5 habilidades" skills={profile.topSkills} />
+        ) : (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Top 5 habilidades</Text>
+            <Text style={styles.bodyTextMuted}>Todavía no cargaste habilidades destacadas.</Text>
+          </View>
+        )}
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Sobre mí</Text>
-          <Text style={styles.bodyText}>{USER_PROFILE.about}</Text>
+          <Text style={styles.bodyText}>{profile.about}</Text>
         </View>
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Changas realizadas recientemente</Text>
           <View style={styles.reviewList}>
-            {USER_PROFILE.reviews.map((review) => (
-              <ReviewItem key={review.id} {...review} />
-            ))}
+             {hasReviews
+              ? profile.reviews.map((review) => <ReviewItem key={review.id} {...review} />)
+              : (
+                  <Text style={styles.bodyTextMuted}>
+                    Todavía no hay reseñas disponibles.
+                  </Text>
+                )}
           </View>
         </View>
       </ScrollView>
+      );
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen
+        options={{
+          title: "Mi Perfil",
+          headerTitleAlign: "center",
+          headerShadowVisible: false,
+        }}
+      />
+      {renderState()}
     </SafeAreaView>
   );
 };
@@ -170,6 +294,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACING.sm,
   },
+
+  infoList: {
+    gap: SPACING.xs,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  infoLabel: {
+    fontSize: FONT.sm,
+    color: palette.muted,
+    fontFamily: fontFamilies.rounded,
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: FONT.md,
+    color: palette.text,
+    fontFamily: fontFamilies.rounded,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+  },
+
   sectionTitle: {
     fontSize: FONT.lg,
     color: palette.text,
@@ -200,12 +350,49 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     fontSize: FONT.md,
-    lineHeight: 22,
     color: palette.text,
+    fontFamily: fontFamilies.rounded,
+    lineHeight: 22,
+  },
+  bodyTextMuted: {
+    fontSize: FONT.md,
+    color: palette.muted,
     fontFamily: fontFamilies.rounded,
   },
   reviewList: {
+    gap: SPACING.sm,
+  },
+  stateContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.lg,
     gap: SPACING.md,
+  },
+  stateTitle: {
+    fontSize: FONT.xl,
+    fontWeight: "700",
+    color: palette.text,
+    textAlign: "center",
+    fontFamily: fontFamilies.rounded,
+  },
+  stateMessage: {
+    fontSize: FONT.md,
+    color: palette.muted,
+    textAlign: "center",
+    fontFamily: fontFamilies.rounded,
+  },
+  retryButton: {
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    backgroundColor: palette.tint,
+  },
+  retryButtonText: {
+    color: palette.white,
+    fontWeight: "700",
+    fontFamily: fontFamilies.rounded,
   },
 });
 

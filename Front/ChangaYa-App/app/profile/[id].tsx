@@ -14,150 +14,20 @@ import {
 } from "react-native";
 
 import ProfileHeader, { type ProfileHeaderAction } from "../../components/profile/ProfileHeader";
-import SkillsList, {
-  type SkillItem,
-} from "../../components/profile/SkillsList";
-import ReviewItem, {
-  type ReviewItemProps,
-} from "../../components/profile/ReviewItem";
+import SkillsList from "../../components/profile/SkillsList";
+import ReviewItem from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
+import {
+  buildInitials,
+  mapUserToPublicProfile,
+  type ApiPerfil,
+  type ApiUser,
+  type PublicProfile,
+} from "./profile-utils";
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
-
-type ApiPerfil = {
-  descripcion?: string | null;
-};
-
-
-type ApiUser = {
-  usuarioID?: string | number;
-  usuarioId?: string | number;
-  id?: string | number;
-  _id?: string | number;
-  userId?: string | number;
-  tipoUsuario?: string | null;
-  nombre?: string | null;
-  apellido?: string | null;
-  nombreUsuario?: string | null;
-  ubicacion?: string | null;
-  direccion?: string | null;
-  ciudad?: string | null;
-  provincia?: string | null;
-  descripcion?: string | null;
-  sobreMi?: string | null;
-  habilidades?: string[] | string | null;
-  rankingGeneral?: number | null;
-  changasCompletadas?: number | null;
-  changasRealizadas?: number | null;
-};
-
-type PublicProfile = {
-  id: string;
-  name: string;
-  location: string;
-  rating: number;
-  completedJobs?: number;
-  role?: string | null;
-  generalScore?: number | null;
-  about: string;
-  topSkills: SkillItem[];
-  reviews: ReviewItemProps[];
-};
-
-const sanitizeText = (value?: string | null) => {
-  if (!value || typeof value !== "string") {
-    return "";
-  }
-  return value.trim();
-};
-
-const buildDisplayName = (user: ApiUser) => {
-  const composed =
-    [sanitizeText(user.nombre), sanitizeText(user.apellido)]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-  const candidates = [composed, sanitizeText(user.nombreUsuario)];
-  const valid = candidates.find((candidate) => Boolean(candidate));
-  return valid || "Usuario";
-};
-
-const buildLocation = (user: ApiUser) => {
-  const locationCandidates = [
-    sanitizeText(user.ubicacion),
-    sanitizeText(user.direccion),
-    [sanitizeText(user.ciudad), sanitizeText(user.provincia)]
-      .filter(Boolean)
-      .join(", "),
-  ].map((candidate) => candidate.trim()).filter(Boolean);
-
-  return locationCandidates[0] || "Ubicación sin especificar";
-};
-
-const parseSkills = (skills: ApiUser["habilidades"]): SkillItem[] => {
-  if (!skills) return [];
-
-  const normalizedArray = Array.isArray(skills)
-    ? skills
-    : String(skills)
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-  return normalizedArray.map((label, index) => ({
-    id: `${label}-${index}`,
-    label,
-    level: Math.max(0.3, 1 - index * 0.15),
-  }));
-};
-
-const mapUserToPublicProfile = (user: ApiUser, perfil: ApiPerfil | null, fallbackId: string): PublicProfile => {
-  const rating = typeof user.rankingGeneral === "number" ? user.rankingGeneral : 0;
-  const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : null;
-  const completedJobs =
-    typeof user.changasCompletadas === "number"
-      ? user.changasCompletadas
-      : typeof user.changasRealizadas === "number"
-      ? user.changasRealizadas
-      : undefined;
-
-  const aboutText =
-    sanitizeText(perfil?.descripcion) ||
-    sanitizeText(user.descripcion) ||
-    sanitizeText(user.sobreMi) ||
-    "Este usuario aún no agregó una descripción.";
-
-  const profileId =
-    user.usuarioID ?? user.usuarioId ?? user.id ?? user._id ?? user.userId ?? fallbackId;
-
-  return {
-    id: String(profileId),
-    name: buildDisplayName(user),
-    location: buildLocation(user),
-    rating,
-    role: user.tipoUsuario ?? null,
-    completedJobs,
-    generalScore: normalizedScore,
-    about: aboutText,
-    topSkills: parseSkills(user.habilidades),
-    reviews: [],
-  };
-};
-
-const buildInitials = (name: string) => {
-  if (!name) return "?";
-  const initials = name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-
-  return initials || name.charAt(0).toUpperCase() || "?";
-};
 
 const PerfilPublicoScreen = () => {
   const { id: rawId, changaId: rawChangaId } =
