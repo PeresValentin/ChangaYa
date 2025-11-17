@@ -397,14 +397,38 @@ const PerfilPublicoScreen = () => {
         return;
       }
 
-      await axios.put(
-        `${API_URL}/api/changas/${changaId}`,
-        { estado: "trabajador asignado", trabajadorID: profile.id },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+       const headers = { Authorization: `Bearer ${token}` };
+      const basePayload = { estado: "trabajador asignado" };
+      const workerIdKeys: Array<"trabajadorID" | "trabajadorId"> = ["trabajadorID", "trabajadorId"];
+      let assignmentCompleted = false;
+      let lastError: any = null;
 
+      for (const key of workerIdKeys) {
+        try {
+          await axios.put(
+            `${API_URL}/api/changas/${changaId}`,
+            { ...basePayload, [key]: profile.id },
+            { headers },
+          );
+          assignmentCompleted = true;
+          lastError = null;
+          break;
+        } catch (attemptError: any) {
+          lastError = attemptError;
+          const message = String(
+            attemptError?.response?.data?.error || attemptError?.message || "",
+          ).toLowerCase();
+          const isMissingColumn = message.includes("column") && message.includes(key.toLowerCase());
+
+          if (!isMissingColumn) {
+            throw attemptError;
+          }
+        }
+      }
+
+      if (!assignmentCompleted) {
+        throw lastError;
+      }
       setIsAssignedHere(true);
       Alert.alert("Trabajador asignado", `${profile.name} fue asignado a la changa.`);
     } catch (assignError: any) {
