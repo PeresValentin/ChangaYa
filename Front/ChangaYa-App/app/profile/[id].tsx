@@ -1,6 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -21,152 +25,219 @@ const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
 
+type ApiUser = {
+  usuarioID?: string | number;
+  usuarioId?: string | number;
+  id?: string | number;
+  _id?: string | number;
+  userId?: string | number;
+  nombre?: string | null;
+  apellido?: string | null;
+  nombreUsuario?: string | null;
+  ubicacion?: string | null;
+  direccion?: string | null;
+  ciudad?: string | null;
+  provincia?: string | null;
+  descripcion?: string | null;
+  sobreMi?: string | null;
+  habilidades?: string[] | string | null;
+  rankingGeneral?: number | null;
+  changasCompletadas?: number | null;
+  changasRealizadas?: number | null;
+};
+
 type PublicProfile = {
   id: string;
   name: string;
   location: string;
   rating: number;
-  completedJobs: number;
-  generalScore: number;
+  completedJobs?: number;
+  generalScore?: number | null;
   about: string;
   topSkills: SkillItem[];
   reviews: ReviewItemProps[];
 };
 
-const MOCK_PROFILES: PublicProfile[] = [
-  {
-    id: "worker-001",
-    name: "Rafael Eguren",
-    location: "La Plata, Buenos Aires",
-    rating: 4.8,
-    completedJobs: 132,
-    generalScore: 0.92,
-    about:
-      "Plomera certificada con más de 6 años de experiencia. Me especializo en reparaciones urgentes, instalaciones nuevas y mantenimiento preventivo. Me encanta trabajar de manera prolija y mantener informado al cliente durante cada etapa.",
-    topSkills: [
-      { id: "skill-plomeria", label: "Plomería", level: 0.97, color: "#6BA368" },
-      { id: "skill-gas", label: "Instalaciones de gas", level: 0.9, color: "#A1E99D" },
-      { id: "skill-electricidad", label: "Electricidad", level: 0.86, color: "#CFE6CD" },
-      { id: "skill-pintura", label: "Pintura", level: 0.78, color: "#90C99F" },
-      { id: "skill-mantenimiento", label: "Mantenimiento general", level: 0.74, color: "#B7E4C7" },
-    ],
-    reviews: [
-      {
-        id: "review-1",
-        title: "Reparación de caño en cocina",
-        contractor: "Carlos Pérez",
-        date: "12 de marzo 2024",
-        rating: 4.9,
-        description:
-          "María llegó en menos de una hora y solucionó el problema sin inconvenientes. Además dejó todo impecable y me explicó cómo evitar que vuelva a suceder.",
-      },
-      {
-        id: "review-2",
-        title: "Instalación de termotanque",
-        contractor: "Lorena Díaz",
-        date: "28 de febrero 2024",
-        rating: 4.7,
-        description:
-          "Excelente trabajo, muy cuidadosa con los detalles y cumplió con los tiempos acordados.",
-      },
-      {
-        id: "review-3",
-        title: "Mantenimiento general del baño",
-        contractor: "Javier Gómez",
-        date: "18 de enero 2024",
-        rating: 4.8,
-        description:
-          "Realizó varias reparaciones pequeñas y dejó todo funcionando perfecto. Muy recomendable.",
-      },
-    ],
-  },
-   {
-    id: "worker-002",
-    name: "Ana Martínez",
-    location: "Quilmes, Buenos Aires",
-    rating: 4.6,
-    completedJobs: 88,
-    generalScore: 0.89,
-    about:
-      "Electricista matriculada con foco en instalaciones domiciliarias seguras y eficientes. Disfruto acompañar al cliente en cada paso para que entienda qué estoy haciendo en su hogar.",
-    topSkills: [
-      { id: "skill-electrica", label: "Instalaciones eléctricas", level: 0.92, color: "#6BA368" },
-      { id: "skill-domotica", label: "Automatización hogareña", level: 0.82, color: "#A1E99D" },
-      { id: "skill-seguridad", label: "Seguridad eléctrica", level: 0.9, color: "#90C99F" },
-      { id: "skill-diagnostico", label: "Diagnóstico rápido", level: 0.85, color: "#CFE6CD" },
-    ],
-    reviews: [
-      {
-        id: "review-ana-1",
-        title: "Instalación de lámparas inteligentes",
-        contractor: "Marina Suárez",
-        date: "5 de febrero 2024",
-        rating: 4.8,
-        description:
-          "Ana explicó cada paso con mucha claridad y dejó todo funcionando perfecto. Super recomendada.",
-      },
-      {
-        id: "review-ana-2",
-        title: "Revisión tablero eléctrico",
-        contractor: "Diego Ramos",
-        date: "21 de enero 2024",
-        rating: 4.5,
-        description:
-          "Detectó un problema que otros técnicos no habían visto y lo resolvió al instante.",
-      },
-    ],
-  },
-  {
-    id: "contractor-123",
-    name: "Carlos Pérez",
-    location: "City Bell, Buenos Aires",
-    rating: 4.7,
-    completedJobs: 58,
-    generalScore: 0.88,
-    about:
-      "Contratante habitual de ChangaYa. Me enfoco en mantener relaciones de trabajo justas, pagar a tiempo y dejar reseñas detalladas para ayudar a otros trabajadores.",
-    topSkills: [
-      { id: "skill-planificacion", label: "Planificación", level: 0.84, color: "#6BA368" },
-      { id: "skill-comunicacion", label: "Comunicación", level: 0.88, color: "#A1E99D" },
-      { id: "skill-negociacion", label: "Negociación", level: 0.8, color: "#90C99F" },
-    ],
-    reviews: [
-      {
-        id: "review-carlos-1",
-        title: "Instalación de cortinas",
-        contractor: "María Rodríguez",
-        date: "8 de marzo 2024",
-        rating: 4.9,
-        description:
-          "Carlos fue claro con los requerimientos y pagó al instante. Excelente experiencia como contratante.",
-      },
-      {
-        id: "review-carlos-2",
-        title: "Pintura interior",
-        contractor: "Ana Martínez",
-        date: "30 de enero 2024",
-        rating: 4.6,
-        description:
-          "Muy organizado y respetuoso. Coordinamos horarios sin problema y la comunicación fue excelente.",
-      },
-    ],
-  },
-];
+const sanitizeText = (value?: string | null) => {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+  return value.trim();
+};
 
-const PerfilPublicoScreen = () => {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const profile =
-    MOCK_PROFILES.find((item) => item.id === id) ?? MOCK_PROFILES[0];
-  const initials = profile.name
+const buildDisplayName = (user: ApiUser) => {
+  const composed =
+    [sanitizeText(user.nombre), sanitizeText(user.apellido)]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+  const candidates = [composed, sanitizeText(user.nombreUsuario)];
+  const valid = candidates.find((candidate) => Boolean(candidate));
+  return valid || "Usuario";
+};
+
+const buildLocation = (user: ApiUser) => {
+  const locationCandidates = [
+    sanitizeText(user.ubicacion),
+    sanitizeText(user.direccion),
+    [sanitizeText(user.ciudad), sanitizeText(user.provincia)]
+      .filter(Boolean)
+      .join(", "),
+  ].map((candidate) => candidate.trim()).filter(Boolean);
+
+  return locationCandidates[0] || "Ubicación sin especificar";
+};
+
+const parseSkills = (skills: ApiUser["habilidades"]): SkillItem[] => {
+  if (!skills) return [];
+
+  const normalizedArray = Array.isArray(skills)
+    ? skills
+    : String(skills)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  return normalizedArray.map((label, index) => ({
+    id: `${label}-${index}`,
+    label,
+    level: Math.max(0.3, 1 - index * 0.15),
+  }));
+};
+
+const mapUserToPublicProfile = (user: ApiUser, fallbackId: string): PublicProfile => {
+  const rating = typeof user.rankingGeneral === "number" ? user.rankingGeneral : 0;
+  const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : null;
+  const completedJobs =
+    typeof user.changasCompletadas === "number"
+      ? user.changasCompletadas
+      : typeof user.changasRealizadas === "number"
+      ? user.changasRealizadas
+      : undefined;
+
+  const aboutText =
+    sanitizeText(user.descripcion) ||
+    sanitizeText(user.sobreMi) ||
+    "Este usuario aún no agregó una descripción.";
+
+  const profileId =
+    user.usuarioID ?? user.usuarioId ?? user.id ?? user._id ?? user.userId ?? fallbackId;
+
+  return {
+    id: String(profileId),
+    name: buildDisplayName(user),
+    location: buildLocation(user),
+    rating,
+    completedJobs,
+    generalScore: normalizedScore,
+    about: aboutText,
+    topSkills: parseSkills(user.habilidades),
+    reviews: [],
+  };
+};
+
+const buildInitials = (name: string) => {
+  if (!name) return "?";
+  const initials = name
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-  const generalScorePercent = Math.round(
-    Math.min(1, Math.max(0, profile.generalScore)) * 100,
-  );
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  return initials || name.charAt(0).toUpperCase() || "?";
+};
+
+const PerfilPublicoScreen = () => {
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const profileId = Array.isArray(rawId) ? rawId[0] : rawId;
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!profileId) {
+        setErrorMessage("No encontramos el perfil solicitado.");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setErrorMessage(null);
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token) {
+          setErrorMessage("Tu sesión expiró. Iniciá sesión nuevamente.");
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await axios.get<ApiUser>(`${API_URL}/api/usuarios/${profileId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        setProfile(mapUserToPublicProfile(response.data, profileId));
+      } catch (error: any) {
+        console.error("Error al cargar el perfil público", error?.response?.data || error);
+        const backendMessage =
+          typeof error?.response?.data?.error === "string"
+            ? error.response.data.error
+            : "No pudimos cargar el perfil.";
+        setErrorMessage(backendMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [API_URL, profileId]);
+
+  const initials = buildInitials(profile?.name ?? "");
+  const generalScorePercent = profile
+    ? Math.round(
+        Math.min(
+          1,
+          Math.max(
+            0,
+            profile.generalScore != null ? profile.generalScore : profile.rating > 0 ? profile.rating / 5 : 0,
+          ),
+        ) * 100,
+      )
+    : 0;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ActivityIndicator style={{ marginTop: SPACING.lg }} color={palette.tint} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.sectionTitle}>Ups...</Text>
+          <Text style={styles.bodyText}>{errorMessage}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.sectionTitle}>No encontramos el perfil solicitado.</Text>
+          <Text style={styles.bodyText}>Intentá nuevamente en unos minutos.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -205,9 +276,7 @@ const PerfilPublicoScreen = () => {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Puntuación general</Text>
-            <Text style={styles.sectionValue}>
-              {generalScorePercent}%
-            </Text>
+            <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
           </View>
           <View style={styles.progressTrack}>
             <View
@@ -218,33 +287,39 @@ const PerfilPublicoScreen = () => {
             />
           </View>
           <Text style={styles.sectionHint}>
-            Basado en {profile.completedJobs} changas completadas.
+           {profile.completedJobs
+              ? `Basado en ${profile.completedJobs} changas completadas.`
+              : "Seguimos recopilando reseñas de este usuario."}
           </Text>
         </View>
 
-        <SkillsList title="Top 5 habilidades" skills={profile.topSkills} />
+        {profile.topSkills.length > 0 ? (
+          <SkillsList title="Habilidades" skills={profile.topSkills} />
+        ) : null}
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Sobre mí</Text>
           <Text style={styles.bodyText}>{profile.about}</Text>
         </View>
-
+        {profile.reviews.length > 0 ? (
         <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Changas realizadas</Text>
-            <View style={styles.reviewsBadge}>
-              <Ionicons name="medal-outline" size={16} color={palette.tint} />
-              <Text style={styles.reviewsBadgeText}>
-                {profile.reviews.length} reseñas recientes
-              </Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Changas realizadas</Text>
+              <View style={styles.reviewsBadge}>
+                <Ionicons name="medal-outline" size={16} color={palette.tint} />
+                <Text style={styles.reviewsBadgeText}>
+                  {profile.reviews.length} reseñas recientes
+                </Text>
+              </View>
+            </View>
+            <View style={styles.reviewList}>
+              {profile.reviews.map((review) => (
+                <ReviewItem key={review.id} {...review} />
+              ))}
             </View>
           </View>
-          <View style={styles.reviewList}>
-            {profile.reviews.map((review) => (
-              <ReviewItem key={review.id} {...review} />
-            ))}
-          </View>
-        </View>
+        ) : null}
+          
       </ScrollView>
     </SafeAreaView>
   );
@@ -302,6 +377,10 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: palette.tint,
     borderRadius: 999,
+  },
+  errorContainer: {
+    padding: SPACING.lg,
+    gap: SPACING.sm,
   },
   sectionHint: {
     fontSize: FONT.sm,

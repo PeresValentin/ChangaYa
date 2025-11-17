@@ -23,6 +23,10 @@ const palette = theme.Colors.light;
 
 interface ApiUser {
     usuarioID?: string;
+    usuarioId?: string | number;
+    id?: string | number;
+    _id?: string | number;
+    userId?: string | number;
     nombre?: string;
     apellido?: string;
     nombreUsuario?: string;
@@ -89,7 +93,7 @@ const sanitizeName = (value?: string | null) => (value ?? '').trim();
 
 const buildDisplayName = (userLike?: ApiUser | null) => {
     if (!userLike) return '';
-
+    
     const first = sanitizeName(userLike?.nombre);
     const last = sanitizeName(userLike?.apellido);
     const fullname = [first, last].filter(Boolean).join(' ').trim();
@@ -122,9 +126,18 @@ const buildInitials = (name: string) => {
 
 const toPersonSummary = (userLike?: ApiUser | null): PersonSummary | null => {
     if (!userLike) return null;
+    const candidateId =
+        userLike.usuarioID ||
+        userLike.usuarioId ||
+        userLike.id ||
+        userLike._id ||
+        userLike.userId;
+
+    if (!candidateId) return null;
+
     const name = buildDisplayName(userLike) || 'Usuario';
     return {
-        id: String(userLike.usuarioID || ''),
+        id: String(candidateId),
         initials: buildInitials(name),
         name,
         rating: typeof userLike.rankingGeneral === 'number' ? userLike.rankingGeneral : null,
@@ -529,13 +542,13 @@ useFocusEffect(
         if (!jobDetails?.postulaciones) return [];
         return jobDetails.postulaciones
             .map((post) => toPersonSummary(post.usuario))
-            .filter((candidate): candidate is PersonSummary => Boolean(candidate?.id));
+             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
     }, [jobDetails?.postulaciones]);
 
     const assignedWorkers = useMemo(() => {
         if (!isContractor) return [];
 
-        const assignedIDs = jobDetails?.changa?.trabajadores || [];
+        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
         if (assignedIDs.length === 0) return [];
 
         return applicants.filter((a) => assignedIDs.includes(a.id));
