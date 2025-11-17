@@ -24,6 +24,7 @@ type JobStatus = 'abierta' | 'en_progreso' | 'finalizada';
 type JobSubStatus = 'pendiente_seleccion' | 'pocos_candidatos' | 'en_curso' | 'completada';
 type PostulacionStatus = 'aceptada' | 'rechazada' | 'iniciada';
 
+
 interface Changa {
     id: string;
     title: string;
@@ -74,6 +75,7 @@ const mapChangaToFront = (c: any): Changa => {
 
         icon: "briefcase-outline",
     };
+    
 };
 
 // ------------------ Card --------------------
@@ -108,7 +110,12 @@ const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
     return (
         <TouchableOpacity
             style={styles.card}
-            onPress={() => router.push({ pathname: "/changas/[id]", params: { id: changa.id } })}
+            onPress={() =>
+                router.push({
+                    pathname: "/changas/[id]",
+                    params: { id: changa.id }, // <--- SOLO ID
+                })
+            }
         >
             <View style={styles.cardHeader}>
                 <View style={styles.cardIconWrapper}>
@@ -154,34 +161,51 @@ export default function MisChangasScreen() {
     const pathname = usePathname();
 
     const { goToProfile } = useProfileNavigation();
-  const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
+    const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
 
-    const [changasAbiertas, setChangasAbiertas] = useState<Changa[]>([]);
-    const [changasEnProgreso, setChangasEnProgreso] = useState<Changa[]>([]);
-    const [changasFinalizadas, setChangasFinalizadas] = useState<Changa[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [userRole, setUserRole] = useState<"trabajador" | "contratante" | null>(null);
 
-    // ---- Fetch Data from Backend ----
+    useEffect(() => {
+        const loadUserRole = async () => {
+            try {
+                const storedUser = await AsyncStorage.getItem("userData");
+                if (!storedUser) return;
+
+                const parsed = JSON.parse(storedUser);
+
+                // ACEPTAR rol o tipoUsuario (lo que venga)
+                const rawRol = (parsed?.rol || parsed?.tipoUsuario || "").toLowerCase().trim();
+
+                if (rawRol.includes("trab")) {
+                    setUserRole("trabajador");
+                } else {
+                    setUserRole("contratante");
+                }
+
+                console.log("ROL DETECTADO (MIS):", rawRol);
+            } catch (e) {
+                console.error("Error leyendo rol en MIS", e);
+            }
+        };
+
+        loadUserRole();
+    }, []);
+
     const loadChangas = async () => {
         try {
             setLoading(true);
             const token = await AsyncStorage.getItem("jwtToken");
             const headers = { Authorization: `Bearer ${token}` };
 
-            // Abiertas
-            const abiertasRes = await axios.get(`${API_URL}/api/changas/abiertas`, { headers });
-            setChangasAbiertas(abiertasRes.data.map(mapChangaToFront));
+            const abiertas = await axios.get(`${API_URL}/api/changas/abiertas`, { headers });
+            const enProceso = await axios.get(`${API_URL}/api/changas/enProceso`, { headers });
+            const finalizadas = await axios.get(`${API_URL}/api/changas/finalizadas`, { headers });
 
-            // En Proceso
-            const enProcesoRes = await axios.get(`${API_URL}/api/changas/enProceso`, { headers });
-            setChangasEnProgreso(enProcesoRes.data.map(mapChangaToFront));
-
-            // Finalizadas
-            const finalizadasRes = await axios.get(`${API_URL}/api/changas/finalizadas`, { headers });
-            setChangasFinalizadas(finalizadasRes.data.map(mapChangaToFront));
-
+            setChangasAbiertas(abiertas.data.map(mapChangaToFront));
+            setChangasEnProgreso(enProceso.data.map(mapChangaToFront));
+            setChangasFinalizadas(finalizadas.data.map(mapChangaToFront));
         } catch (err) {
-            console.error("❌ Error cargando changas:", err);
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -190,6 +214,12 @@ export default function MisChangasScreen() {
     useEffect(() => {
         loadChangas();
     }, []);
+
+    const [changasAbiertas, setChangasAbiertas] = useState<Changa[]>([]);
+    const [changasEnProgreso, setChangasEnProgreso] = useState<Changa[]>([]);
+    const [changasFinalizadas, setChangasFinalizadas] = useState<Changa[]>([]);
+    const [loading, setLoading] = useState(true);
+
 
     const filteredChangas = useMemo(() => {
         if (activeFilter === 'abierta') return changasAbiertas;
