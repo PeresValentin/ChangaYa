@@ -5,7 +5,6 @@ import axios from 'axios';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 
 import {
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
 import theme from '../../constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;

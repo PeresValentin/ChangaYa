@@ -4,13 +4,13 @@ import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";

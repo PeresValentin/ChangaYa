@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useProfileNavigation } from "../../hooks/use-profile-navigation";
 

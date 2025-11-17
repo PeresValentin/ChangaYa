@@ -5,13 +5,13 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   Alert,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ProfileHeader, { type ProfileHeaderAction } from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";

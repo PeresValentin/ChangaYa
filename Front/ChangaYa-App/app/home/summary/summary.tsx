@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { memo, useMemo, useEffect, useRef } from "react";
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   Animated,
 } from "react-native";
 import theme from "../../../constants/theme";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
