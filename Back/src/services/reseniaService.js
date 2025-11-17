@@ -148,7 +148,7 @@ export const createReseniaService = async ({ comentario, changaID, usuarioID, de
   ----------------------------------- */
   const { data: nuevaReseña, error: resError } = await supabase
     .from("Reseña")
-    .insert([{ comentario, changaID, usuarioID, destinatarioID }])
+    .insert([{ comentario, changaID, usuarioID, destinatarioID, estado: "pendiente" }])
     .select()
 
   if (resError) throw new Error(resError.message)
