@@ -1,7 +1,6 @@
 // app/notificaciones.tsx
 import React, { useState } from 'react';
 import {
-    SafeAreaView,
     ScrollView,
     View,
     Text,
@@ -12,6 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import theme from "../../constants/theme"; // Asegurate que la ruta a tu theme sea correcta
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 // Constantes del Tema
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;

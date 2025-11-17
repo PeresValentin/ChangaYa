@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import React, { useMemo, useState, useEffect } from 'react';
 import {
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,6 +12,7 @@ import axios from "axios";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
 import { useProfileNavigation } from '../../hooks/use-profile-navigation';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;

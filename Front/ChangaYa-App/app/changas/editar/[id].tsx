@@ -8,7 +8,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLoading } from '../../../hooks/LoadingContext';
 import {
     Alert,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Switch,
@@ -20,6 +19,7 @@ import {
     Platform
 } from 'react-native';
 import theme from '../../../constants/theme'; // Importa tu tema
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Constantes del tema
 const { FONT, SPACING, RADIUS } = theme;

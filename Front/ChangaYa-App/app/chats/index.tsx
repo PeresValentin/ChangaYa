@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +16,7 @@ import ChatListItem, { Chat } from '../../components/ChatListItem';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 const { FONT, SPACING, RADIUS } = theme;
