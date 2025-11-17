@@ -103,6 +103,134 @@ export const getChangasByContratante = async (req, res) => {
   }
 }
 
+export const getChangasFinalizadasByUser = async (req, res) => {
+  try {
+    const user = req.user; // { id, rol }
+
+    let query = supabase.from('Changa').select('*');
+
+    if (user.rol === 'trabajador') {
+      query = query
+        .contains('trabajadores', [user.id])
+        .eq('estado', 'finalizada');
+    } else if (user.rol === 'contratante') {
+      query = query
+        .eq('contratanteID', user.id)
+        .eq('estado', 'finalizada');
+    } else {
+      return res.status(403).json({ error: 'Rol no autorizado' });
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return res.status(200).json(data);
+
+  } catch (err) {
+    console.error("❌ Error en getChangasFinalizadasByUser:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const getChangasEnProceso = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (user.rol === 'trabajador') {
+
+      // Obtener solo las changas con postulación aceptada/rechazada
+      const { data, error } = await supabase
+        .from('Changa')
+        .select(`
+          *,
+          postulacion:Postulacion!inner (
+            estado,
+            usuarioID
+          )
+        `)
+        .eq('estado', 'enProceso')
+        .eq('Postulacion.usuarioID', user.id)
+        .in('Postulacion.estado', ['aceptada', 'rechazada']);
+
+      if (error) throw error;
+
+      return res.status(200).json(data);
+    }
+
+    if (user.rol === 'contratante') {
+
+      const { data, error } = await supabase
+        .from('Changa')
+        .select('*')
+        .eq('contratanteID', user.id)
+        .eq('estado', 'enProceso');
+
+      if (error) throw error;
+
+      return res.status(200).json(data);
+    }
+
+    return res.status(403).json({ error: 'Rol no autorizado' });
+
+  } catch (err) {
+    console.error("❌ Error en getChangasEnProceso:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const getChangasAbiertas = async (req, res) => {
+  try {
+    
+    const user = req.user;
+
+    if (user.rol === 'trabajador') {
+
+      const { data: postulaciones, error: postError } = await supabase
+        .from('Postulacion')
+        .select('changaID')
+        .eq('usuarioID', user.id);
+
+      if (postError) throw postError;
+
+      const changaIDs = postulaciones.map(p => p.changaID);
+
+      if (changaIDs.length === 0)
+        return res.status(200).json([]);
+
+      const { data, error } = await supabase
+        .from('Changa')
+        .select('*')
+        .in('changaID', changaIDs)
+        .eq('estado', 'iniciada');
+
+      if (error) throw error;
+
+      return res.status(200).json(data);
+    }
+
+    if (user.rol === 'contratante') {
+
+      const { data, error } = await supabase
+        .from('Changa')
+        .select('*')
+        .eq('contratanteID', user.id)
+        .eq('estado', 'iniciada');
+
+      if (error) throw error;
+
+      return res.status(200).json(data);
+    }
+
+    return res.status(403).json({ error: 'Rol no autorizado' });
+
+  } catch (err) {
+    console.error("❌ Error en getChangasAbiertas:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+
+
 /**
  * Actualizar una changa (solo el dueño)
  */
