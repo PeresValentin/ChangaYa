@@ -18,7 +18,7 @@ import theme from '../../constants/theme'; // Ajusta la ruta a tu theme
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 // =========================================================
-// DATOS DE EJEMPLO (Simulados - Info del Contratante)
+// DATOS DE EJEMPLO (Simuladoss - Info del Contratante)
 // ========================================================
 const DUMMY_EMPLOYER_DATA = {
   employerName: "Ana Gómez",

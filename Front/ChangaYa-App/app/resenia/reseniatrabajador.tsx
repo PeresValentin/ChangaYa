@@ -18,7 +18,7 @@ import theme from '../../constants/theme'; // Ajusta la ruta a tu theme
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 // =========================================================
-// DATOS DE EJEMPLO (Simulados)
+// DATOS DE EJEMPLO (Simuladoss)
 // =========================================================
 const DUMMY_REVIEW_DATA = {
   workerName: "Juan Pérez",
