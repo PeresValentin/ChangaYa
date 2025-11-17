@@ -1177,7 +1177,7 @@ const styles = StyleSheet.create({
 
 actionButtonTextSecondary: {
     color: palette.tint,
-    fontSize: FONT.md,
+    fontSize: FONT.sm,
     fontWeight: "bold",
 },
 });
