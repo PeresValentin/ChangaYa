@@ -559,7 +559,7 @@ useFocusEffect(
     const profile = isContractor ? assignedWorkers : contractorSummary;
     const profileLabel =
         isContractor && !assignedWorkers
-            ? null                   // 👉 OCULTAR si contratado y SIN asignado
+            ? null                   //  OCULTAR si contratado y SIN asignado
             : isContractor
                 ? 'Trabajador asignado'
                 : 'Contratante';

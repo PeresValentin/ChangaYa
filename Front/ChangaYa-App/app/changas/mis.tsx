@@ -21,6 +21,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 // ------------------ Types --------------------
 type JobStatus = 'abierta' | 'en_progreso' | 'finalizada';
 type JobSubStatus = 'pendiente_seleccion' | 'pocos_candidatos' | 'en_curso' | 'completada';
+type PostulacionStatus = 'aceptada' | 'rechazada' | 'iniciada';
 
 interface Changa {
     id: string;
@@ -32,6 +33,7 @@ interface Changa {
     status: JobStatus;
     subStatus: JobSubStatus;
     postulantes?: number;
+    postulacionEstado?: PostulacionStatus;
     trabajador?: {
         name: string;
         rating?: number;
@@ -53,6 +55,10 @@ const mapChangaToFront = (c: any): Changa => {
         finalizada: "completada"
     };
 
+    //  Aquí obtenemos estado de postulación (solo aplica a trabajador)
+    const postulacionEstado: PostulacionStatus | undefined =
+        c.postulacion?.[0]?.estado ?? undefined;
+
     return {
         id: c.changaID,
         title: c.titulo,
@@ -61,7 +67,11 @@ const mapChangaToFront = (c: any): Changa => {
         status: statusMap[c.estado],
         subStatus: subStatusMap[c.estado],
         postulantes: Array.isArray(c.trabajadores) ? c.trabajadores.length : 0,
-        icon: "briefcase-outline"
+
+        //  Ahora sí pasa la info correctamente al front
+        postulacionEstado,
+
+        icon: "briefcase-outline",
     };
 };
 
@@ -113,6 +123,26 @@ const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
                     </Text>
                 </View>
             </View>
+            {changa.postulacionEstado && changa.subStatus === "en_curso" && (
+                <View style={styles.postulacionEstadoWrapper}>
+                    <Text
+                        style={[
+                            styles.postulacionEstadoText,
+                            changa.postulacionEstado === "aceptada"
+                                ? styles.postulacionAceptada
+                                : changa.postulacionEstado === "rechazada"
+                                ? styles.postulacionRechazada
+                                : styles.postulacionPendiente
+                        ]}
+                    >
+                        {changa.postulacionEstado === 'aceptada'
+                            ? '✔ Aceptada'
+                            : changa.postulacionEstado === 'rechazada'
+                            ? '✖ Rechazada'
+                            : 'Postulación enviada'}
+                    </Text>
+                </View>
+            )}
         </TouchableOpacity>
     );
 };
@@ -265,7 +295,7 @@ export default function MisChangasScreen() {
                     {/* ---- Sin resultados ---- */}
                     {filteredChangas.length === 0 && (
                         <Text style={styles.noJobsText}>
-                            No tienes changas en estado "{activeFilter.replace('_', ' ')}".
+                            No tienes changas en estado {activeFilter.replace('_', ' ')}.
                         </Text>
                     )}
 
@@ -480,6 +510,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 6,
   },
+  postulacionEstadoWrapper: {
+    marginTop: 4,
+    alignSelf: "flex-end",     // ESTO LO PONE A LA DERECHA
+    },
+
+    postulacionEstadoText: {
+        fontSize: FONT.sm,
+        fontWeight: "600",
+    },
+
+    postulacionAceptada: {
+        color: "#2e7d32", // verde
+    },
+
+    postulacionRechazada: {
+        color: "#c62828", // rojo
+    },
+
+    postulacionPendiente: {
+        color: palette.muted,
+    },
   navItem: { alignItems: "center", gap: 4, flex: 1, paddingVertical: SPACING.xs },
   navItemActive: { position: "relative" },
   navText: { fontSize: FONT.sm, color: palette.muted },
