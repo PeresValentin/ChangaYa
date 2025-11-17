@@ -64,72 +64,60 @@ const CrearChangaScreen = () => {
 
     // TODO: Implementar lógica para publicar la changa
     const handlePublish = async () => {
-        // Validaciones básicas
-        if (!titulo || !descripcion || !precio || !ubicacion.trim()) {
-            Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
-            return;
-        }
-
-        try {
-            // Obtener token almacenado en AsyncStorage
-            const token = await AsyncStorage.getItem("jwtToken");
-            if (!token) {
-            Alert.alert("Error", "No hay sesión activa. Volvé a iniciar sesión.");
-            router.replace("/auth/login");
-            return;
-            }
-
-            // Convertir dirección en coordenadas antes de enviar
-const geo = await axios.get("https://nominatim.openstreetmap.org/search", {
-    params: {
-        q: ubicacion,
-        format: "json",
-        limit: 1
+    if (!titulo || !descripcion || !precio || !ubicacion.trim()) {
+        Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
+        return;
     }
-});
 
-if (!geo.data.length) {
-    Alert.alert("Ubicación inválida", "No pudimos encontrar esa dirección.");
-    return;
-}
+    try {
+        const token = await AsyncStorage.getItem("jwtToken");
 
-const lat = geo.data[0].lat;
-const lon = geo.data[0].lon;
-
-// Construir payload listo para PostGIS
-const nuevaChanga = {
-    titulo,
-    descripcion,
-    remuneracion: parseFloat(precio),
-    horaInicio: new Date().toISOString(),
-    horaFin: new Date().toISOString(),
-    ubicacion: `POINT(${lon} ${lat})`, // ← AHORA SÍ
-};
-
-console.log("Enviando changa:", nuevaChanga);
-            // Hacer la petición POST
-            const response = await axios.post(
-            `${API_URL}/api/changas`,
-            nuevaChanga,
-            {
-                headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-                },
-            }
-            );
-
-            if (response.status === 201 || response.status === 200) {
-            Alert.alert("✅ Changa publicada", "Tu changa fue creada con éxito.");
-            router.replace("/home/contratante");
-            } else {
-            Alert.alert("Error", `El servidor respondió con código ${response.status}`);
-            }
-        } catch (error: any) {
-            console.error("Error al publicar changa:", error.response?.data || error.message);
-            Alert.alert("Error", error.response?.data?.error || "No se pudo crear la changa");
+        if (!token) {
+        Alert.alert("Error", "No hay sesión activa.");
+        router.replace("/auth/login");
+        return;
         }
+
+        // 1. Geocode usando tu backend
+        const geoResp = await axios.get(`${API_URL}/api/utils/geocode`, {
+        params: { q: ubicacion },
+        headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const { lat, lon } = geoResp.data;
+
+        // 2. Changa lista para enviar
+        const nuevaChanga = {
+        titulo,
+        descripcion,
+        remuneracion: parseFloat(precio),
+        horaInicio: new Date().toISOString(),
+        horaFin: new Date().toISOString(),
+        ubicacion: `POINT(${lon} ${lat})`,
         };
+
+        // 3. Crear la changa
+        const response = await axios.post(
+        `${API_URL}/api/changas`,
+        nuevaChanga,
+        {
+            headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+            }
+        }
+        );
+
+        Alert.alert("Éxito", "Changa creada correctamente.");
+        router.replace("/home/contratante");
+
+    } catch (error: any) {
+        console.error("Error al publicar changa:", error.response?.data || error.message);
+
+        Alert.alert("Error", error.response?.data?.error || "No se pudo crear la changa");
+    }
+    };
+
     
     // TODO: Lógica para añadir un habilidad (simplificada)
     const handleAddRequisito = () => {
