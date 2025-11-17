@@ -25,7 +25,6 @@ export default function RootLayout() {
         <Stack.Screen name="home/contratante" options={{ headerShown: false }} />
         <Stack.Screen name="chats/index" options={{ headerShown: false }} />
         <Stack.Screen name="chats/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="changas/favoritas" options={{ headerShown: false }} />
         <Stack.Screen name="changas/mis" options={{ headerShown: false }} />
         <Stack.Screen name="changas/nueva" options={{ headerShown: false }} />
         <Stack.Screen name="changas/[id]" options={{ headerShown: false }} />

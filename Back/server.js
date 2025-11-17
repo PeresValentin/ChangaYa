@@ -32,6 +32,7 @@ import habilidadRoutes from './src/routes/habilidadRoutes.js'
 import reseniaRoutes from './src/routes/reseniaRoutes.js' 
 import reseniaHabilidadRoutes from './src/routes/reseniaHabilidadRoutes.js'
 import perfilRoutes from './src/routes/perfilRoutes.js'
+import utilsRoutes from "./src/routes/utilsRoutes.js";
 
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/changas", changaRoutes);
@@ -41,6 +42,7 @@ app.use('/api/habilidad', habilidadRoutes)
 app.use('/api/resenia', reseniaRoutes)
 app.use('/api/reseniaHabilidad', reseniaHabilidadRoutes)
 app.use('/api/perfil', perfilRoutes)
+app.use("/api/utils", utilsRoutes);
 
 // Puerto
 const PORT = process.env.PORT || 3000;
