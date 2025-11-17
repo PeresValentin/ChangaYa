@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -10,7 +11,10 @@ import {
   Alert,
 } from "react-native";
 
+import axios from "axios";
+
 import theme from "../../constants/theme";
+import { buildDisplayName, buildInitials, buildEmail, type ApiUser } from "./profile-utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { FONT, SPACING, RADIUS } = theme;
@@ -33,10 +37,10 @@ interface SettingsSection {
   options: SettingOption[];
 }
 
-const USER_SUMMARY = {
-  name: "Rafael Eguren",
-  email: "rafael.eguren@gmail.com",
-  updatedAt: "Actualizado hace 2 hs",
+type UserSummary = {
+  name: string;
+  email: string;
+  updatedAt: string;
 };
 
 const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -107,59 +111,110 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
 
 const AjustesScreen = () => {
   const router = useRouter();
-  const initials = USER_SUMMARY.name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const [userSummary, setUserSummary] = useState<UserSummary>({
+    name: "Tu perfil",
+    email: "Sincronizando datos...",
+    updatedAt: "Cargando información",
+  });
+
+  useEffect(() => {
+    const loadSummary = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser) as Partial<ApiUser>;
+        const fallbackName = buildDisplayName(parsedUser as ApiUser);
+        const fallbackEmail = buildEmail(parsedUser as ApiUser);
+
+        setUserSummary((prev) => ({
+          ...prev,
+          name: fallbackName,
+          email: fallbackEmail || prev.email,
+          updatedAt: "Datos guardados en tu dispositivo",
+        }));
+
+        const extractedId =
+          parsedUser?.usuarioID ??
+          parsedUser?.usuarioId ??
+          parsedUser?.id ??
+          (parsedUser as any)?._id ??
+          parsedUser?.userId;
+
+        if (!API_URL) return;
+
+        const token = await AsyncStorage.getItem("jwtToken");
+        if (!token || !extractedId) return;
+
+        const headers = { Authorization: `Bearer ${token}` };
+        const response = await axios.get<ApiUser>(`${API_URL}/api/usuarios/${extractedId}`, {
+          headers,
+        });
+
+        const apiName = buildDisplayName(response.data);
+        const apiEmail = buildEmail(response.data) || fallbackEmail || "Email no disponible";
+
+        setUserSummary({
+          name: apiName,
+          email: apiEmail,
+          updatedAt: "Actualizado hace unos segundos",
+        });
+      } catch (error) {
+        console.error("Error al cargar los datos del usuario en Ajustes", error);
+      }
+    };
+
+    loadSummary();
+  }, [API_URL]);
+
+  const initials = buildInitials(userSummary.name);
 
   const handleOptionPress = (optionId: string) => {
-  switch (optionId) {
-    case "notifications":
-      router.push("/notifications/notifications");
-      break;
+    switch (optionId) {
+      case "notifications":
+        router.push("/notifications/notifications");
+        break;
 
-    case "edit-profile":
-    case "favorites":
-    case "history":
-    case "help-center":
-    case "contact-support":
-      console.log(`Opción "${optionId}" aún no implementada.`);
-      
-      break;
-    case "logout":
-      Alert.alert(
-        "Cerrar Sesión",
-        "¿Estás seguro de que querés cerrar sesión?",
-        [
-          {
-            text: "Cancelar",
-            style: "cancel",
-          },
-          {
-            text: "Cerrar Sesión",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                await AsyncStorage.removeItem("jwtToken");
-                await AsyncStorage.removeItem("userData");
-                    router.back(); 
-                setTimeout(() => {
-                  router.replace("/auth/welcome");
-                }, 100);
-              } catch (e) {
-                console.error("Error al cerrar sesión:", e);
-                Alert.alert("Error", "No se pudo cerrar la sesión.");
-              }
+      case "edit-profile":
+      case "favorites":
+      case "history":
+      case "help-center":
+      case "contact-support":
+        console.log(`Opción "${optionId}" aún no implementada.`);
+        break;
+
+      case "logout":
+        Alert.alert(
+          "Cerrar Sesión",
+          "¿Estás seguro de que querés cerrar sesión?",
+          [
+            {
+              text: "Cancelar",
+              style: "cancel",
             },
-          },
-        ]
-      );
-      break;
-  }
-};
+            {
+              text: "Cerrar Sesión",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await AsyncStorage.removeItem("jwtToken");
+                  await AsyncStorage.removeItem("userData");
+                  router.back();
+                  setTimeout(() => {
+                    router.replace("/auth/login");
+                  }, 100);
+                } catch (e) {
+                  console.error("Error al cerrar sesión:", e);
+                  Alert.alert("Error", "No se pudo cerrar la sesión.");
+                }
+              },
+            },
+          ]
+        );
+        break;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -180,9 +235,9 @@ const AjustesScreen = () => {
             <Text style={styles.heroInitials}>{initials}</Text>
           </View>
           <View style={styles.heroTextWrapper}>
-            <Text style={styles.heroName}>{USER_SUMMARY.name}</Text>
-            <Text style={styles.heroEmail}>{USER_SUMMARY.email}</Text>
-            <Text style={styles.heroUpdatedAt}>{USER_SUMMARY.updatedAt}</Text>
+            <Text style={styles.heroName}>{userSummary.name}</Text>
+            <Text style={styles.heroEmail}>{userSummary.email}</Text>
+            <Text style={styles.heroUpdatedAt}>{userSummary.updatedAt}</Text>
           </View>
         </View>
 

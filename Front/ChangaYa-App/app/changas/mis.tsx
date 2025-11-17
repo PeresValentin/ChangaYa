@@ -12,6 +12,7 @@ import {
 import axios from "axios";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
+import { useProfileNavigation } from '../../hooks/use-profile-navigation';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -152,7 +153,8 @@ export default function MisChangasScreen() {
     const router = useRouter();
     const pathname = usePathname();
 
-    const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
+    const { goToProfile } = useProfileNavigation();
+  const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
 
     const [changasAbiertas, setChangasAbiertas] = useState<Changa[]>([]);
     const [changasEnProgreso, setChangasEnProgreso] = useState<Changa[]>([]);
