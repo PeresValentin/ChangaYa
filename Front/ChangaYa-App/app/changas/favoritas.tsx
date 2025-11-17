@@ -12,6 +12,7 @@ import {
     View
 } from 'react-native';
 import theme from '../../constants/theme'; // Ajusta la ruta si es necesario
+import { useProfileNavigation } from '../../hooks/use-profile-navigation';
 
 // =========================================================
 // CONSTANTES Y TIPOS
@@ -177,6 +178,7 @@ const FavoriteJobCard: React.FC<{ changa: FavoriteChanga }> = ({ changa }) => {
 export default function MisFavoritasScreen() {
     const router = useRouter();
     const pathname = usePathname();
+    const { goToProfile } = useProfileNavigation();
     // Estado para controlar qué filtro está activo ('abierta', 'postulada', 'finalizada')
     const [activeFilter, setActiveFilter] = useState<FavoriteStatus>('abierta');
 
@@ -278,7 +280,7 @@ export default function MisFavoritasScreen() {
                         )}
                         {/* Mensaje si no hay resultados en el filtro activo */}
                         {filteredFavoritas.length === 0 && (
-                            <Text style={styles.noJobsText}>No tienes changas favoritas en estado "{activeFilter}".</Text>
+                            <Text style={styles.noJobsText}>No tienes changas favoritas en estado {activeFilter}.</Text>
                         )}
                     </View>
 
@@ -314,7 +316,13 @@ export default function MisFavoritasScreen() {
                                 key={item.id}
                                 style={[styles.navItem, isActive && styles.navItemActive]}
                                 // Navega a la ruta correspondiente al botón
-                                onPress={() => router.push(item.route)}
+                                onPress={() => {
+                                    if (item.id === 'perfil') {
+                                        goToProfile();
+                                        return;
+                                    }
+                                    router.push(item.route);
+                                }}
                             >
                                 <Ionicons
                                     name={item.icon}

@@ -10,6 +10,7 @@ import {
     View
 } from 'react-native';
 import theme from '../../constants/theme';
+import { useProfileNavigation } from '../../hooks/use-profile-navigation';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -186,6 +187,7 @@ const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
 export default function MisChangasScreen() {
   const router = useRouter();
   const pathname = usePathname();
+  const { goToProfile } = useProfileNavigation();
   const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
 
   const filteredChangas = useMemo(() => {
@@ -277,7 +279,7 @@ export default function MisChangasScreen() {
             )}
             
             {filteredChangas.length === 0 && activeFilter !== 'finalizada' && (
-                 <Text style={styles.noJobsText}>No tienes changas en estado "{activeFilter.replace('_', ' ')}".</Text>
+                 <Text style={styles.noJobsText}>No tienes changas en estado {activeFilter.replace('_', ' ')}.</Text>
             )}
 
             <View style={styles.summaryFooterCard}>
@@ -307,7 +309,17 @@ export default function MisChangasScreen() {
               <TouchableOpacity
                 key={item.id}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => router.push(item.id === 'home' ? ('/home/contratante' as Href) : item.route)} 
+                onPress={() => {
+                  if (item.id === 'perfil') {
+                    goToProfile();
+                    return;
+                  }
+                  if (item.id === 'home') {
+                    router.push('/home/contratante' as Href);
+                    return;
+                  }
+                  router.push(item.route);
+                }}
               >
                 <Ionicons
                   name={item.icon}
