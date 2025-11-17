@@ -1,235 +1,917 @@
-// Front/ChangaYa-App/app/chats/[id].tsx
+// app/chats/[id].tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  FlatList,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { io, Socket } from 'socket.io-client';
+import { jwtDecode } from 'jwt-decode';
+
 import { useProfileNavigation } from '@/hooks/use-profile-navigation';
+import theme from '../../constants/theme';
 
-// --- Datos de Ejemplo ---
-// (Reemplazar con tu lógica de Supabase)
+const { SPACING } = theme;
 
-// Simulamos los detalles del chat que abrimos
-// En la vida real, harías un fetch a Supabase usando el 'id'
-const DUMMY_CHAT_DETAILS = {
-    id: '1',
-    userId: 'worker-002',
-    user: 'Ana Martínez',
-    avatar: 'AM', // Podría ser una URL a una imagen
-    online: true,
+// =======================
+// Tipos API
+// =======================
+interface ApiMensaje {
+  mensajeID: string;
+  fecha: string;
+  contenido: string;
+  archivoAdjunto?: string | null;
+  chatID: string;
+  usuarioID: string;
+}
+
+interface ApiChatUser {
+  usuarioID: string;
+  nombre?: string;
+  apellido?: string;
+  nombreUsuario?: string;
+  email?: string;
+  telefono?: string;
+  rankingGeneral?: number | null;
+}
+
+interface ApiChatDetalle {
+  chatID: string;
+  fechaInicio: string;
+  usuario1: ApiChatUser;
+  usuario2: ApiChatUser;
+}
+
+// =======================
+// Tipos Front
+// =======================
+
+type Attachment = {
+  type: 'audio';
+  uri?: string;
+  base64?: string;
+  durationMs?: number;
 };
 
-// Simulamos los mensajes de ESE chat
-// 'current_user_id' es el ID del usuario logueado (el tuyo)
-const DUMMY_MESSAGES: Message[] = [
-    { id: 'm1', text: 'Hola! Me interesa la changa de plomería. ¿Todavía está disponible?', time: '10:30', senderId: 'ana_martinez' },
-    { id: 'm2', text: '¡Hola Ana! Sí, está disponible. ¿Cuándo podrías venir?', time: '10:32', senderId: 'current_user_id' },
-    { id: 'm3', text: 'Puedo ir esta tarde a las 15hs', time: '10:33', senderId: 'ana_martinez' },
-    { id: 'm4', text: 'Perfecto! Te espero entonces', time: '10:33', senderId: 'current_user_id' },
-    { id: 'm5', text: '¿Cuál es la dirección exacta?', time: '10:35', senderId: 'ana_martinez' },
-    { id: 'm6', text: 'Calle 50 y 15, La Plata', time: '10:36', senderId: 'current_user_id', type: 'location' },
-    { id: 'm7', text: 'Genial! Llego en 15 minutos', time: '10:36', senderId: 'ana_martinez' },
-    { id: 'm8', text: '¡Perfecto! 🚀', time: '10:38', senderId: 'current_user_id' },
-];
-
-// --- Tipos (para TypeScript) ---
 type Message = {
-    id: string;
-    text: string;
-    time: string;
-    senderId: string;
-    type?: 'text' | 'location'; // Para mensajes especiales
+  id: string;
+  text: string;
+  senderId: string;
+  createdAt: string;
+  formattedTime: string;
+  isPending?: boolean;
+  attachment?: Attachment | null;
+};
+type JwtPayload = {
+  id?: string;
+  usuarioID?: string;
+  userId?: string;
+  email?: string;
+  rol?: string;
 };
 
-// --- Componente de Burbuja de Mensaje ---
-const MessageBubble = ({ message }: { message: Message }) => {
-    // Determinamos si el mensaje es del usuario actual
-    const isCurrentUser = message.senderId === 'current_user_id';
+const formatTime = (date: string | number | Date) =>
+  new Date(date).toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
-    // Renderizado especial para la ubicación
-    if (message.type === 'location') {
-        return (
-            <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
-                <View style={[styles.messageBubble, isCurrentUser ? styles.bubbleRight : styles.bubbleLeft, styles.locationBubble]}>
-                    <Ionicons name="location-sharp" size={20} color={isCurrentUser ? '#fff' : '#333'} />
-                    <Text style={[styles.messageText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                        Ubicación compartida
-                    </Text>
-                    <Text style={[styles.locationText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                        {message.text}
-                    </Text>
-                </View>
-                <Text style={styles.timestamp}>{message.time}</Text>
-            </View>
-        );
+  const formatDuration = (ms?: number) => {
+  if (!ms || Number.isNaN(ms)) return '0:00';
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const parseAttachment = (raw?: string | null): Attachment | null => {
+  if (!raw) return null;
+
+  const fallbackFromDataUrl = () => {
+    if (raw.startsWith('data:audio')) {
+      const [, base64Content] = raw.split(',');
+      return {
+        type: 'audio',
+        base64: base64Content || raw,
+      } satisfies Attachment;
     }
-    
-    // Renderizado para mensajes de texto
-    return (
-        <View style={[styles.messageRow, isCurrentUser ? styles.rowRight : styles.rowLeft]}>
-            <View style={[styles.messageBubble, isCurrentUser ? styles.bubbleRight : styles.bubbleLeft]}>
-                <Text style={[styles.messageText, isCurrentUser ? styles.textRight : styles.textLeft]}>
-                    {message.text}
-                </Text>
-            </View>
-            <Text style={styles.timestamp}>{message.time} {isCurrentUser && '✓✓'}</Text>
-        </View>
-    );
+    return null;
+  };
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.type === 'audio') {
+      if (typeof parsed.base64 === 'string') {
+        return {
+          type: 'audio',
+          base64: parsed.base64,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+
+      if (typeof parsed.uri === 'string') {
+        return {
+          type: 'audio',
+          uri: parsed.uri,
+          durationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : undefined,
+        } satisfies Attachment;
+      }
+    }
+  } catch {
+    return fallbackFromDataUrl();
+  }
+
+  if (raw.startsWith('http') || raw.startsWith('file:')) {
+    return { type: 'audio', uri: raw } satisfies Attachment;
+  }
+
+  return fallbackFromDataUrl();
 };
 
-// --- Componente de "Changa Relacionada" ---
-// (Basado en tu captura)
-const RelatedChangaCard = () => (
-    <View style={styles.changaCard}>
-        <View style={styles.changaIcon}>
-            <Ionicons name="build-outline" size={24} color="#34A853" />
-        </View>
-        <View style={styles.changaDetails}>
-            <Text style={styles.changaTitle}>Plomero Urgente</Text>
-            <Text style={styles.changaInfo}>$15.000 • A 0.5 km</Text>
-        </View>
-    </View>
-);
 
-// --- Pantalla Principal del Chat ---
-const ChatScreen = () => {
-    // 1. OBTENER EL ID DEL CHAT
-    // 'useLocalSearchParams' lee los parámetros de la URL, en este caso, el '[id]'
-    const { id } = useLocalSearchParams();
-    const { goToProfile } = useProfileNavigation();
-    
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [newMessage, setNewMessage] = useState('');
+// =======================
+// Helpers
+// =======================
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const AUDIO_PLACEHOLDER_TEXT = '[Audio]';
 
-    // 2. LÓGICA DE INGENIERÍA (Carga de Datos)
-    useEffect(() => {
-        // Aquí harías tu fetch a Supabase
-        // const fetchMessages = async () => {
-        //     const { data, error } = await supabase
-        //         .from('messages')
-        //         .select('*')
-        //         .eq('chat_id', id) // Usamos el ID de la ruta
-        //         .order('created_at', { ascending: false }); // Pedir los más nuevos primero
-            
-        //     if (data) setMessages(data);
-        // }
-        // fetchMessages();
+const mapApiMessageToMessage = (m: ApiMensaje): Message => ({
+  id: m.mensajeID,
+  text: m.contenido || '',
+  createdAt: m.fecha,
+  formattedTime: formatTime(m.fecha),
+  senderId: m.usuarioID,
+  attachment: parseAttachment(m.archivoAdjunto),
+});
 
-        // Por ahora, usamos los datos de ejemplo
-        // Invertimos los mensajes para que FlatList (con 'inverted') los muestre correctamente
-        setMessages(DUMMY_MESSAGES.slice().reverse()); 
+const getDisplayName = (u?: ApiChatUser | null) => {
+  if (!u) return '';
+  const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+  return full || u.nombreUsuario || 'Usuario';
+};
 
-    }, [id]); // Se ejecuta cada vez que el 'id' del chat cambie
+const getInitials = (u?: ApiChatUser | null) => {
+  const name = getDisplayName(u);
+  if (!name) return '?';
+  const parts = name.split(' ').filter(Boolean);
+  const initials = parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+  return initials || name[0]?.toUpperCase() || '?';
+};
 
-    // 3. LÓGICA DE INGENIERÍA (Enviar Mensaje)
-    const handleSend = () => {
-        if (newMessage.trim() === '') return;
 
-        // Aquí enviarías el mensaje a Supabase
-        // const { data, error } = await supabase
-        //     .from('messages')
-        //     .insert([
-        //         { chat_id: id, sender_id: 'current_user_id', text: newMessage }
-        //     ]);
-        
-        // Y aquí lo agregarías al estado local (simulación)
-        const sentMessage: Message = {
-            id: `m${Math.random()}`,
-            text: newMessage,
-            time: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-            senderId: 'current_user_id'
-        };
-        // Agregamos el nuevo mensaje al principio (porque la lista está invertida)
-        setMessages(prevMessages => [sentMessage, ...prevMessages]);
-        setNewMessage('');
+let globalSound: Audio.Sound | null = null;
+
+const stopGlobalSound = async () => {
+  if (globalSound) {
+    try {
+      await globalSound.stopAsync();
+      await globalSound.unloadAsync();
+    } catch {}
+    globalSound = null;
+  }
+};
+
+// =======================
+// Audio Attachment
+// =======================
+const AudioAttachment = ({
+  attachment,
+  isCurrentUser,
+}: {
+  attachment: Attachment & { type: 'audio' };
+  isCurrentUser: boolean;
+}) => {
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [playableUri, setPlayableUri] = useState<string | null>(attachment.uri ?? null);
+  const tempFileUriRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const cleanupTempFile = async () => {
+      if (tempFileUriRef.current) {
+        try {
+          await FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true });
+        } catch (error) {
+          console.warn('Error limpiando audio temporal:', error);
+        }
+        tempFileUriRef.current = null;
+      }
     };
 
-    return (
-        <KeyboardAvoidingView 
-            style={styles.container}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} // Ajuste fino
-        >
-            {/* 4. CONFIGURACIÓN DEL HEADER */}
-            {/* Usamos Stack.Screen para configurar el header de esta ruta dinámica */}
-            <Stack.Screen
-                options={{
-                    // Esto recrea el header de tu captura
-                    headerTitle: () => (
-                        <View style={styles.headerContainer}>
-                            <Image style={styles.headerAvatar} source={{ uri: 'https://via.placeholder.com/40' }} />
-                            <View>
-                                <Text style={styles.headerTitle}>{DUMMY_CHAT_DETAILS.user}</Text>
-                                <Text style={styles.headerSubtitle}>En línea</Text>
-                            </View>
-                        </View>
-                    ),
-                    headerRight: () => (
-                        <View style={styles.headerActions}>
-                            <TouchableOpacity
-                                style={styles.headerIconButton}
-                                onPress={() => goToProfile(DUMMY_CHAT_DETAILS.userId)}
-                                accessibilityLabel="Ver perfil"
-                            >
-                                <Ionicons name="person-circle-outline" size={24} color="#333" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.headerIconButton}>
-                                <Ionicons name="ellipsis-vertical" size={24} color="#333" />
-                            </TouchableOpacity>
-                        </View>
-                    ),
-                    headerBackTitle: '', // Esto pone un texto vacío en el botón 'Atrás' de iOS // Oculta el texto "Atrás" en iOS
-                    headerShadowVisible: false, // Quita la sombra
-                    headerStyle: { backgroundColor: '#F9FEFB' }, // Color de fondo del header
-                }}
-            />
+    const stopExistingSound = async () => {
+      if (soundRef.current) {
+        try {
+          await soundRef.current.unloadAsync();
+        } catch (error) {
+          console.error('Error deteniendo audio:', error);
+        }
+        soundRef.current = null;
+        setIsPlaying(false);
+      }
+    };
 
-            {/* 5. LISTA DE MENSAJES */}
-            {/* 'inverted' es clave para los chats. 
-              Renderiza la lista al revés (del final al principio)
-              y los nuevos items se agregan "abajo".
-            */}
-            <FlatList
-                data={messages}
-                renderItem={({ item }) => <MessageBubble message={item} />}
-                keyExtractor={(item) => item.id}
-                style={styles.messageList}
-                contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 10 }}
-                inverted // ¡Muy importante para chats!
-            />
+    const ensureUri = async () => {
+      if (attachment.uri) {
+        await stopExistingSound();
+        await cleanupTempFile();
+        if (isMounted) setPlayableUri(attachment.uri);
+        return;
+      }
 
-            {/* 6. TARJETA DE CHANGA RELACIONADA */}
-            <RelatedChangaCard />
+      if (!attachment.base64) return;
 
-            {/* 7. BARRA DE ENTRADA */}
-            <View style={styles.inputContainer}>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Ionicons name="mic-outline" size={24} color="#555" />
-                </TouchableOpacity>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder="Escribe un mensaje..."
-                    value={newMessage}
-                    onChangeText={setNewMessage}
-                    multiline
-                />
-                <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-                    <Ionicons name="send" size={22} color="#fff" />
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
-    );
+      try {
+        await stopExistingSound();
+        await cleanupTempFile();
+        const tempUri = `${FileSystem.cacheDirectory}voice-${Date.now()}-${Math.random()}.m4a`;
+        await FileSystem.writeAsStringAsync(tempUri, attachment.base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        tempFileUriRef.current = tempUri;
+        if (isMounted) {
+          setPlayableUri(tempUri);
+        }
+      } catch (error) {
+        console.error('Error preparando audio:', error);
+      }
+    };
+
+    ensureUri();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [attachment.base64, attachment.uri]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      if (tempFileUriRef.current) {
+        FileSystem.deleteAsync(tempFileUriRef.current, { idempotent: true }).catch(() => {});
+        tempFileUriRef.current = null;
+      }
+    };
+  }, []);
+
+  const togglePlayback = useCallback(async () => {
+    if (!playableUri) return;
+
+    try {
+      // 🔥 DETENER AUDIO GLOBAL SI EXISTE
+      if (!soundRef.current) {
+        await stopGlobalSound();
+      }
+
+      if (!soundRef.current) {
+        setIsLoading(true);
+
+        const { sound } = await Audio.Sound.createAsync({ uri: playableUri });
+        soundRef.current = sound;
+        globalSound = sound; // 🔥 REGISTRAR COMO AUDIO GLOBAL
+
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (!status.isLoaded) return;
+          setIsPlaying(status.isPlaying);
+          // 🔥 Cuando terminó, NO volver a reproducir
+          if (status.didJustFinish) {
+            sound.setPositionAsync(0);
+            sound.pauseAsync();       // 🔥 aseguramos que quede pausado
+            setIsPlaying(false);
+            globalSound = null;
+          }
+        });
+
+        await sound.playAsync();
+        setIsPlaying(true);
+      } else {
+        const status = await soundRef.current.getStatusAsync();
+        if (!status.isLoaded) return;
+
+        if (status.isPlaying) {
+          await soundRef.current.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await stopGlobalSound();        //  PARAR CUALQUIER OTRO ANTES
+          globalSound = soundRef.current; //  REGISTRASTE ESTE COMO EL ÚNICO
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error reproduciendo audio:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [playableUri])
+
+  return (
+    <View style={styles.audioBubble}>
+      <TouchableOpacity
+        style={[styles.audioPlayButton, (!playableUri || isLoading) && styles.audioButtonDisabled]}
+        onPress={togglePlayback}
+        disabled={!playableUri || isLoading}
+      >
+        <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="#fff" />
+      </TouchableOpacity>
+      <View style={styles.audioMeta}>
+        <Text style={[styles.audioLabel, isCurrentUser ? styles.textRight : styles.textLeft]}>
+          Nota de voz
+        </Text>
+        {attachment.durationMs ? (
+          <Text
+            style={[styles.audioDuration, isCurrentUser ? styles.textRight : styles.textLeft]}
+          >
+            {formatDuration(attachment.durationMs)}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
 };
+
+
+// =======================
+// Burbuja de Mensaje
+// =======================
+const MessageBubble = ({
+  message,
+  currentUserId,
+}: {
+  message: Message;
+  currentUserId: string | null;
+}) => {
+  const isCurrentUser = currentUserId != null && message.senderId === currentUserId;
+  const audioAttachment = message.attachment?.type === 'audio' ? message.attachment : null;
+  const shouldShowText =
+    !!message.text &&
+    message.text.trim().length > 0 &&
+    (!audioAttachment || message.text !== AUDIO_PLACEHOLDER_TEXT);
+
+  return (
+    <View
+      style={[
+        styles.messageRow,
+        isCurrentUser ? styles.rowRight : styles.rowLeft,
+      ]}
+    >
+      <View
+        style={[
+          styles.messageBubble,
+          isCurrentUser ? styles.bubbleRight : styles.bubbleLeft,
+        ]}
+      >
+        {audioAttachment ? (
+          <AudioAttachment attachment={audioAttachment} isCurrentUser={isCurrentUser} />
+        ) : null}
+
+        {shouldShowText ? (
+          <Text
+            style={[
+              styles.messageText,
+              isCurrentUser ? styles.textRight : styles.textLeft,
+            ]}
+          >
+            {message.text}
+          </Text>
+        ) : null}
+
+        {/* HORA + TILDES DENTRO DE LA BURBUJA */}
+        <View style={styles.timestampWrapper}>
+          <Text
+            style={[
+              styles.timestampInside,
+              isCurrentUser ? styles.timestampRight : styles.timestampLeft,
+            ]}
+          >
+            {message.formattedTime}
+          </Text>
+
+          {isCurrentUser && !message.isPending ? (
+            <Ionicons
+              name="checkmark-done"
+              size={14}
+              color={isCurrentUser ? '#DFF6E4' : '#7A7A7A'}
+              style={{ marginLeft: 3 }}
+            />
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+
+// =======================
+// Pantalla principal
+// =======================
+const ChatScreen = () => {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { goToProfile } = useProfileNavigation();
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  const [details, setDetails] = useState<ApiChatDetalle | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+const [isRecording, setIsRecording] = useState(false);
+  const [recordingTimeMs, setRecordingTimeMs] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
+   const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  }, []);
+  const socketRef = useRef<Socket | null>(null);
+  const lastTypingRef = useRef(false);
+   const listRef = useRef<FlatList<Message> | null>(null);
+
+  // ---- Derivar el otro usuario del chat ----
+  const otherUser: ApiChatUser | null = useMemo(() => {
+    if (!details || !currentUserId) return null;
+    return details.usuario1.usuarioID === currentUserId
+      ? details.usuario2
+      : details.usuario1;
+  }, [details, currentUserId]);
+
+  const sortMessages = useCallback((items: Message[]) => {
+    return items.slice().sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, []);
+
+  const mergeIncomingMessage = useCallback(
+    (incoming: Message) => {
+      setMessages((prev) => {
+        const withoutOptimistic = prev.filter(
+          (msg) =>
+            !(
+              msg.isPending &&
+              msg.senderId === incoming.senderId &&
+              msg.text === incoming.text
+            )
+        );
+
+        const existingIndex = withoutOptimistic.findIndex(
+          (msg) => msg.id === incoming.id
+        );
+
+        if (existingIndex !== -1) {
+          const updated = [...withoutOptimistic];
+          updated[existingIndex] = { ...incoming };
+          return sortMessages(updated);
+        }
+
+        return sortMessages([...withoutOptimistic, incoming]);
+      });
+    },
+    [sortMessages]
+  );
+   const sendAudioMessage = useCallback(
+    async (uri: string, durationMs?: number) => {
+      if (!socketRef.current || !id || !currentUserId) return;
+
+      try {
+        setIsSendingAudio(true);
+        const base64Audio = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const contenido = AUDIO_PLACEHOLDER_TEXT;
+        const attachmentPayload = {
+          type: 'audio',
+          mimeType: 'audio/m4a',
+          base64: base64Audio,
+          durationMs,
+        };
+
+        const optimisticMsg: Message = {
+          id: `temp-audio-${Date.now()}`,
+          text: contenido,
+          senderId: currentUserId,
+          createdAt: new Date().toISOString(),
+          formattedTime: formatTime(new Date()),
+          isPending: true,
+          attachment: {
+            type: 'audio',
+            uri,
+            durationMs,
+          },
+        };
+
+        setMessages((prev) => sortMessages([...prev, optimisticMsg]));
+
+        socketRef.current.emit('sendMessage', {
+          chatID: id,
+          contenido,
+          archivoAdjunto: JSON.stringify(attachmentPayload),
+        });
+      } catch (error) {
+        console.error('Error enviando audio:', error);
+      } finally {
+        setIsSendingAudio(false);
+      }
+    },
+    [currentUserId, id, sortMessages]
+  );
+
+  const startRecording = useCallback(async () => {
+    if (isRecording || isSendingAudio) return;
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permiso requerido',
+          'Necesitamos acceso al micrófono para poder grabar y enviar notas de voz.'
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      recordingRef.current = recording;
+      recordingStartTimeRef.current = Date.now();
+      setRecordingTimeMs(0);
+      setIsRecording(true);
+
+      clearRecordingTimer();
+      recordingIntervalRef.current = setInterval(() => {
+        if (recordingStartTimeRef.current) {
+          setRecordingTimeMs(Date.now() - recordingStartTimeRef.current);
+        }
+      }, 200);
+    } catch (error) {
+      console.error('Error iniciando grabación:', error);
+      setIsRecording(false);
+      clearRecordingTimer();
+    }
+  }, [clearRecordingTimer, isRecording, isSendingAudio]);
+
+  const stopRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      const durationMs = recordingStartTimeRef.current
+        ? Date.now() - recordingStartTimeRef.current
+        : recordingTimeMs;
+
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      if (uri) {
+        await sendAudioMessage(uri, durationMs);
+      }
+    } catch (error) {
+      console.error('Error deteniendo grabación:', error);
+    } finally {
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      setIsRecording(false);
+      clearRecordingTimer();
+      setRecordingTimeMs(0);
+    }
+  }, [clearRecordingTimer, recordingTimeMs, sendAudioMessage]);
+
+  // =======================
+  // 1) Cargar token, userID, chatDetails y mensajes iniciales
+  // =======================
+  useEffect(() => {
+    const init = async () => {
+      if (!id) return;
+      try {
+        setLoading(true);
+        const storedToken = await AsyncStorage.getItem('jwtToken');
+        if (!storedToken) {
+          console.warn('⛔ No hay token JWT en AsyncStorage');
+          setLoading(false);
+          return;
+        }
+        setToken(storedToken);
+
+        const decoded = jwtDecode<JwtPayload>(storedToken);
+        const userIdFromToken =
+          decoded.id || decoded.usuarioID || decoded.userId || null;
+        setCurrentUserId(userIdFromToken);
+
+        // Traer detalles del chat (usuario1/usuario2)
+        const chatRes = await axios.get<ApiChatDetalle>(
+          `${API_URL}/api/chats/${id}`,
+          {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          }
+        );
+        setDetails(chatRes.data);
+
+        // Traer mensajes del chat
+        const msgRes = await axios.get<ApiMensaje[]>(
+          `${API_URL}/api/chats/${id}/mensajes`,
+          {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          }
+        );
+
+        const mapped = msgRes.data
+          .map(mapApiMessageToMessage)
+          .sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+
+        setMessages(mapped);
+      } catch (err) {
+        console.error('❌ Error inicializando chat:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, [id]);
+
+  // =======================
+  // 2) Conectar socket.io y manejar eventos
+  // =======================
+  useEffect(() => {
+    if (!id || !currentUserId || !token || !API_URL) return;
+
+    const socket = io(API_URL, {
+      transports: ['websocket'],
+      auth: { token },
+    });
+
+    socketRef.current = socket;
+
+    socket.emit('joinChat', { chatID: id, userID: currentUserId });
+
+    // Nuevo mensaje recibido
+    socket.on('nuevoMensaje', (apiMsg: ApiMensaje) => {
+      if (apiMsg.chatID !== id) return;
+      mergeIncomingMessage(mapApiMessageToMessage(apiMsg));
+    });
+
+    // Indicador escribiendo...
+    socket.on('typing', ({ userID, isTyping }) => {
+     if (userID === otherUser?.usuarioID) {
+        setIsOtherTyping(!!isTyping);
+      }
+    });
+
+    // Presencia básica
+    socket.on('userOnline', ({ userID }) => {
+       if (userID === otherUser?.usuarioID) {
+        setIsOtherOnline(true);
+      }
+    });
+
+    socket.on('userOffline', ({ userID }) => {
+      if (userID === otherUser?.usuarioID) {
+        setIsOtherOnline(false);
+      }
+    });
+
+    return () => {
+      socket.emit('leaveChat', { chatID: id, userID: currentUserId });
+      socket.disconnect();
+      socketRef.current = null;
+      setIsOtherTyping(false);
+      setIsOtherOnline(false);
+    };
+ }, [currentUserId, id, mergeIncomingMessage, otherUser?.usuarioID, token]);
+  // =======================
+  // 3) Enviar mensaje
+  // =======================
+  const handleSend = () => {
+    if (isRecording || isSendingAudio) return;
+    if (!newMessage.trim()) return;
+    if (!socketRef.current || !id || !currentUserId) return;
+
+    const contenido = newMessage.trim();
+    setNewMessage('');
+
+    // Optimistic UI
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      text: contenido,
+      senderId: currentUserId,
+      createdAt: new Date().toISOString(),
+      formattedTime: formatTime(new Date()),
+      isPending: true,
+    };
+
+    setMessages((prev) => sortMessages([...prev, optimisticMsg]));
+
+    socketRef.current.emit('sendMessage', {
+      chatID: id,
+      contenido,
+      // userID es opcional, el backend puede tomar socket.data.userID
+    });
+  };
+
+  // =======================
+  // 4) Cambio de texto -> "typing"
+  // =======================
+  const handleChangeText = (text: string) => {
+    setNewMessage(text);
+
+    if (!socketRef.current || !id) return;
+
+    const isTypingNow = text.trim().length > 0;
+    if (isTypingNow !== lastTypingRef.current) {
+      socketRef.current.emit('typing', { chatID: id, isTyping: isTypingNow });
+      lastTypingRef.current = isTypingNow;
+    }
+  };
+
+  useEffect(() => {
+    if (!messages.length) return;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [messages.length]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
+    };
+  }, []);
+
+
+  const renderItem = useCallback(
+    ({ item }: { item: Message }) => (
+      <MessageBubble message={item} currentUserId={currentUserId} />
+    ),
+    [currentUserId]
+  );
+
+  // =======================
+  // 5) Render
+  // =======================
+  const headerSubtitle = isOtherTyping
+    ? 'Escribiendo...'
+    : isOtherOnline
+    ? 'En línea'
+    : 'Desconectado';
+
+   const headerDisplayName = getDisplayName(otherUser) || 'Chat';
+   const canSendText = newMessage.trim().length > 0 && !isRecording && !isSendingAudio;
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* HEADER INLINE (el layout global tiene header oculto) */}
+      <View style={styles.inlineHeaderWrapper}>
+        <TouchableOpacity
+          style={styles.inlineHeaderContent}
+          activeOpacity={0.8}
+          onPress={() => otherUser && goToProfile(otherUser.usuarioID)}
+        >
+          <View style={styles.headerAvatar}>
+            <Text style={styles.headerAvatarText}>{getInitials(otherUser)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>{headerDisplayName}</Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {otherUser && (
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => goToProfile(otherUser.usuarioID)}
+          >
+            <Ionicons name="person-circle-outline" size={28} color="#333" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* LISTA DE MENSAJES */}
+      <FlatList
+        ref={listRef}
+        data={messages}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        style={styles.messageList}
+        contentContainerStyle={{
+          paddingHorizontal: 10,
+          paddingVertical: 10,
+        }}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          !loading ? (
+            <View style={{ padding: SPACING.lg }}>
+              <Text style={styles.emptyText}>Todavía no hay mensajes.</Text>
+            </View>
+          ) : null
+        }
+      />
+
+       {/* CHANGA RELACIONADA (placeholder, luego la conectás) */}
+      {/* <RelatedChangaCard /> */}
+
+      {/* INPUT AREA */}
+      <View style={styles.inputContainer}>
+
+        {/* INPUT */}
+        <TextInput
+          style={styles.textInput}
+          placeholder="Escribe un mensaje..."
+          value={newMessage}
+          onChangeText={handleChangeText}
+          multiline
+          editable={!isRecording}
+        />
+
+        {/* TIMER (solo mientras se graba) */}
+        {isRecording && (
+          <Text style={styles.recordTimer}>
+            {formatDuration(recordingTimeMs)}
+          </Text>
+        )}
+
+        {/* MIC o STOP cuando no hay texto */}
+        {!canSendText ? (
+          <TouchableOpacity
+            style={[styles.iconButton, isRecording && styles.iconButtonActive]}
+            onPress={isRecording ? stopRecording : startRecording}
+            disabled={isSendingAudio}
+          >
+            <Ionicons
+              name={isRecording ? "stop" : "mic"}
+              size={24}
+              color={isRecording ? "#b91c1c" : "#555"}
+            />
+          </TouchableOpacity>
+        ) : (
+          // BOTÓN DE ENVIAR CUANDO HAY TEXTO
+          <TouchableOpacity
+            style={styles.sendButton}
+            onPress={handleSend}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </KeyboardAvoidingView>
+  );
+};
+
 
 export default ChatScreen;
 
@@ -237,9 +919,10 @@ export default ChatScreen;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FEFB', // Un blanco-verdoso muy claro
+        backgroundColor: '#F9FEFB',
     },
-    // Header
+
+    // ===== HEADER =====
     headerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -249,7 +932,14 @@ const styles = StyleSheet.create({
         height: 40,
         borderRadius: 20,
         marginRight: 10,
-        backgroundColor: '#E0F0E0' // Placeholder
+        backgroundColor: '#E0F0E0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerAvatarText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#111',
     },
     headerTitle: {
         fontSize: 17,
@@ -269,35 +959,61 @@ const styles = StyleSheet.create({
     headerIconButton: {
         padding: 6,
     },
-    // Lista de Mensajes
+
+    inlineHeaderWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        backgroundColor: '#F9FEFB',
+    },
+    inlineHeaderContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 12,
+    },
+    // ===== LISTA DE MENSAJES =====
     messageList: {
         flex: 1,
     },
+
     messageRow: {
         marginBottom: 10,
         maxWidth: '80%',
+        flexDirection: 'row',
+        alignItems: 'flex-end',
     },
     rowLeft: {
         alignSelf: 'flex-start',
     },
     rowRight: {
         alignSelf: 'flex-end',
-        alignItems: 'flex-end', // Para que el timestamp quede a la derecha
+        alignItems: 'flex-end',
     },
+
     messageBubble: {
-        paddingVertical: 10,
-        paddingHorizontal: 15,
-        borderRadius: 20,
-        marginBottom: 2,
+      paddingVertical: 10,
+      paddingHorizontal: 15,
+      paddingRight: 60, // *** espacio para hora
+      borderRadius: 20,
+      marginBottom: 2,
+      gap: 6,
     },
+
     bubbleLeft: {
-        backgroundColor: '#E6E6E6', // Gris claro para el receptor
+        backgroundColor: '#E6E6E6',
         borderBottomLeftRadius: 5,
     },
     bubbleRight: {
-        backgroundColor: '#34A853', // Verde para el usuario actual
+        backgroundColor: '#34A853',
         borderBottomRightRadius: 5,
     },
+
     messageText: {
         fontSize: 16,
     },
@@ -307,11 +1023,14 @@ const styles = StyleSheet.create({
     textRight: {
         color: '#fff',
     },
+
     timestamp: {
         fontSize: 12,
         color: '#999',
         paddingHorizontal: 5,
     },
+
+    // Para mensajes de ubicación
     locationBubble: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -321,7 +1040,57 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 8,
     },
-    // Changa Card
+
+    iconButtonActive: {
+        backgroundColor: '#FEE2E2',
+        borderRadius: 20,
+    },
+       sendButtonDisabled: {
+        opacity: 0.4,
+    },
+    recordTimer: {
+        color: '#b91c1c',
+        fontWeight: 'bold',
+        marginHorizontal: 8,
+        minWidth: 48,
+        textAlign: 'center',
+    },
+    uploadingAudioText: {
+        color: '#6B7280',
+        fontSize: 12,
+        marginHorizontal: 8,
+    },
+    audioBubble: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      minWidth: 180,
+      maxWidth: 260,
+    },
+    audioPlayButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#34A853',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    audioMeta: {
+      marginLeft: 10,
+    },
+    audioLabel: {
+      fontWeight: '500',
+      fontSize: 14,
+    },
+    audioDuration: {
+      fontSize: 12,
+      color: '#555',
+    },
+    audioButtonDisabled: {
+        opacity: 0.5,
+    },
+    // ===== CHANGA CARD =====
     changaCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -359,28 +1128,46 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
-    // Input
+
+    // ===== INPUT =====
     inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#f0f0f0',
-        backgroundColor: '#fff',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: '#f0f0f0',
+      backgroundColor: '#fff',
     },
     textInput: {
-        flex: 1,
-        backgroundColor: '#f1f1f1',
-        borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        fontSize: 16,
-        marginHorizontal: 10,
-        maxHeight: 100, // Para que no crezca indefinidamente
+      flex: 1,
+      backgroundColor: '#f1f1f1',
+      borderRadius: 20,
+      paddingHorizontal: 15,
+      paddingVertical: 10,
+      fontSize: 16,
+      maxHeight: 100,
+      marginRight: 8, // esto deja espacio antes del botón derecho
+    },
+    actionButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#34A853',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    actionButtonActive: {
+      backgroundColor: '#FEE2E2',
     },
     iconButton: {
-        padding: 5,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#E6F4EA',
+      marginRight: 6,
     },
     sendButton: {
         backgroundColor: '#34A853',
@@ -389,5 +1176,33 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+
+    // ===== LIST EMPTY =====
+    emptyText: {
+        textAlign: 'center',
+        color: '#6B7280',
+        padding: 20,
+        fontSize: 15,
+    },
+    timestampWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      position: 'absolute',
+      bottom: 4,
+      right: 10,
+    },
+
+    timestampInside: {
+      fontSize: 11,
+      opacity: 0.9,
+    },
+
+    timestampRight: {
+      color: '#DFF6E4', // para verde
+    },
+
+    timestampLeft: {
+      color: '#7A7A7A', // para gris
     },
 });
