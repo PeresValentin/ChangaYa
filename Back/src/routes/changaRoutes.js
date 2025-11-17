@@ -9,7 +9,8 @@ import {
   deleteChanga,
   getChangasFinalizadasByUser,
   getChangasEnProceso,
-  getChangasAbiertas
+  getChangasAbiertas,
+  cerrarPostulaciones
 } from '../controllers/changaController.js'
 
 import { verificarToken } from '../middleware/authMiddleware.js'
@@ -33,6 +34,9 @@ router.get('/finalizadas', verificarToken, getChangasFinalizadasByUser);
 router.get('/enProceso', verificarToken, getChangasEnProceso);
 // 3) Changas abiertas (sin asignar / iniciadas)
 router.get('/abiertas', verificarToken, getChangasAbiertas);
+
+router.post('/cerrar/:id', verificarToken, cerrarPostulaciones);
+
 
 
 export default router
