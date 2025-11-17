@@ -400,7 +400,7 @@ const PerfilPublicoScreen = () => {
         const headers = { Authorization: `Bearer ${token}` };
       const workerId = String(profile.id);
       const payload = {
-        estado: "trabajador asignado",
+        estado: "iniciada",
         trabajadores: [workerId],
       };
 
