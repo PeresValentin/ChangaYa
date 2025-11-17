@@ -608,7 +608,7 @@ useFocusEffect(
             key={w.id}
             style={styles.applicantCard}
             activeOpacity={0.85}
-            onPress={() => goToProfile(w.id)}
+            onPress={() => goToProfile(w.id, { changaId: jobDetails?.changa?.changaID })}
         >
             <View style={styles.applicantAvatar}>
                 <Text style={styles.applicantInitials}>{w.initials}</Text>
@@ -723,7 +723,7 @@ useFocusEffect(
 
                                         <TouchableOpacity
                                             style={styles.profileButton}
-                                            onPress={() => goToProfile(worker.id)}
+                                           onPress={() => goToProfile(worker.id, { changaId: jobDetails?.changa?.changaID })}
                                         >
                                             <Text style={styles.profileButtonText}>Ver perfil</Text>
                                         </TouchableOpacity>

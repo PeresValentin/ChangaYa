@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   SafeAreaView,
   ScrollView,
+  Alert,
   StyleSheet,
   Text,
   View,
@@ -36,6 +37,7 @@ type ApiUser = {
   id?: string | number;
   _id?: string | number;
   userId?: string | number;
+  tipoUsuario?: string | null;
   nombre?: string | null;
   apellido?: string | null;
   nombreUsuario?: string | null;
@@ -57,6 +59,7 @@ type PublicProfile = {
   location: string;
   rating: number;
   completedJobs?: number;
+  role?: string | null;
   generalScore?: number | null;
   about: string;
   topSkills: SkillItem[];
@@ -135,6 +138,7 @@ const mapUserToPublicProfile = (user: ApiUser, perfil: ApiPerfil | null, fallbac
     name: buildDisplayName(user),
     location: buildLocation(user),
     rating,
+    role: user.tipoUsuario ?? null,
     completedJobs,
     generalScore: normalizedScore,
     about: aboutText,
@@ -156,13 +160,48 @@ const buildInitials = (name: string) => {
 };
 
 const PerfilPublicoScreen = () => {
-  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
+  const { id: rawId, changaId: rawChangaId } =
+    useLocalSearchParams<{ id?: string | string[]; changaId?: string | string[] }>();
   const profileId = Array.isArray(rawId) ? rawId[0] : rawId;
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const changaId = Array.isArray(rawChangaId) ? rawChangaId[0] : rawChangaId;
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+   const [viewerRole, setViewerRole] = useState<string | null>(null);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [isAssignedHere, setIsAssignedHere] = useState(false);
+
+  useEffect(() => {
+    const loadViewerData = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+        const extractedId =
+          parsedUser?.usuarioID ||
+          parsedUser?.usuarioId ||
+          parsedUser?.id ||
+          parsedUser?._id ||
+          parsedUser?.userId;
+
+        if (extractedId) {
+          setViewerId(String(extractedId));
+        }
+
+        if (typeof parsedUser?.tipoUsuario === "string") {
+          setViewerRole(parsedUser.tipoUsuario);
+        }
+      } catch (storageError) {
+        console.error("Error al leer el usuario almacenado", storageError);
+      }
+    };
+
+    loadViewerData();
+  }, []);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -221,6 +260,11 @@ const PerfilPublicoScreen = () => {
     fetchProfile();
   }, [API_URL, profileId]);
 
+  useEffect(() => {
+    setIsAssignedHere(false);
+  }, [changaId, profileId]);
+
+
   const initials = buildInitials(profile?.name ?? "");
   const generalScorePercent = profile
     ? Math.round(
@@ -233,6 +277,93 @@ const PerfilPublicoScreen = () => {
         ) * 100,
       )
     : 0;
+
+  const normalizedViewerRole = viewerRole ? viewerRole.toLowerCase() : null;
+  const normalizedProfileRole = profile?.role ? profile.role.toLowerCase() : null;
+  const isOwnProfile = Boolean(profile && viewerId && profile.id === viewerId);
+  const canHire = Boolean(
+    changaId &&
+      normalizedViewerRole === "contratante" &&
+      normalizedProfileRole === "trabajador" &&
+      !isOwnProfile,
+  );
+
+  const handleMessagePress = useCallback(() => {
+    Alert.alert("Próximamente", "Muy pronto vas a poder chatear desde esta sección.");
+  }, []);
+
+  const performAssignment = useCallback(async () => {
+    if (!canHire || !profile || !changaId) return;
+    if (!API_URL) {
+      Alert.alert("Configuración incompleta", "No encontramos la URL de la API.");
+      return;
+    }
+
+    try {
+      setIsAssigning(true);
+      const token = await AsyncStorage.getItem("jwtToken");
+      if (!token) {
+        Alert.alert("Sesión expirada", "Iniciá sesión nuevamente para continuar.");
+        return;
+      }
+
+      await axios.put(
+        `${API_URL}/api/changas/${changaId}`,
+        { estado: "trabajador asignado", trabajadorID: profile.id },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      setIsAssignedHere(true);
+      Alert.alert("Trabajador asignado", `${profile.name} fue asignado a la changa.`);
+    } catch (assignError: any) {
+      console.error("Error al asignar trabajador", assignError?.response?.data || assignError);
+      const backendMessage = assignError?.response?.data?.error
+        ? String(assignError.response.data.error)
+        : "No pudimos asignar al trabajador. Intentá nuevamente.";
+      Alert.alert("Error", backendMessage);
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [API_URL, canHire, changaId, profile]);
+
+  const handleHirePress = useCallback(() => {
+    if (!canHire || !profile) return;
+
+    Alert.alert(
+      "Confirmar contratación",
+      `¿Querés asignar a ${profile.name} a esta changa?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Confirmar", style: "default", onPress: performAssignment },
+      ],
+    );
+  }, [canHire, performAssignment, profile]);
+
+  const headerActions = useMemo(() => {
+    if (!canHire) return undefined;
+
+    return [
+      {
+        label: "Mensaje",
+        icon: "chatbubble-ellipses-outline",
+        variant: "secondary" as const,
+        onPress: handleMessagePress,
+      },
+      {
+        label: isAssignedHere ? "Asignado" : isAssigning ? "Contratando..." : "Contratar",
+        icon: "briefcase-outline" as const,
+        variant: "primary" as const,
+        onPress: isAssignedHere ? undefined : handleHirePress,
+        disabled: isAssigning || isAssignedHere,
+        rightAdornment: isAssigning ? (
+          <ActivityIndicator size="small" color={palette.white} style={{ marginLeft: 6 }} />
+        ) : undefined,
+      },
+    ];
+  }, [canHire, handleHirePress, handleMessagePress, isAssignedHere, isAssigning]);
+
 
   if (isLoading) {
     return (
@@ -284,18 +415,7 @@ const PerfilPublicoScreen = () => {
           rating={profile.rating}
           completedJobs={profile.completedJobs}
           avatarInitials={initials}
-          actions={[
-            {
-              label: "Mensaje",
-              icon: "chatbubble-ellipses-outline",
-              variant: "secondary",
-            },
-            {
-              label: "Contratar",
-              icon: "briefcase-outline",
-              variant: "primary",
-            },
-          ]}
+          
         />
 
         <View style={styles.sectionCard}>

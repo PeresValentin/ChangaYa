@@ -25,6 +25,10 @@ const extractUserId = (rawUser: unknown): string | null => {
   return candidate ? String(candidate) : null;
 };
 
+type ProfileNavigationOptions = {
+  changaId?: string | number | null;
+};
+
 export const useProfileNavigation = () => {
   const router = useRouter();
 
@@ -50,13 +54,24 @@ export const useProfileNavigation = () => {
   }, []);
 
   const goToProfile = useCallback(
-    (userId?: string | null) => {
+    (userId?: string | null, options?: ProfileNavigationOptions) => {
+      const normalizedChangaId =
+        options?.changaId !== undefined && options?.changaId !== null
+          ? String(options.changaId)
+          : undefined;
       if (!userId || (currentUserId && userId === currentUserId)) {
-        router.push('/profile');
+        if (normalizedChangaId) {
+          router.push({ pathname: '/profile', params: { changaId: normalizedChangaId } });
+        } else {
+          router.push('/profile');
+        }
         return;
       }
 
-      router.push({ pathname: '/profile/[id]', params: { id: userId } });
+      router.push({
+        pathname: '/profile/[id]',
+        params: normalizedChangaId ? { id: userId, changaId: normalizedChangaId } : { id: userId },
+      });
     },
     [currentUserId, router],
   );
