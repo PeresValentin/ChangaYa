@@ -153,7 +153,7 @@ export const getChangasByContratante = async (req, res) => {
     const { data, error } = await supabase
       .from('Changa')
       .select('*')
-      .contains('trabajadores', [user.id])
+       .eq('contratanteID', user.id)
 
     if (error) throw error
     res.status(200).json(data)
