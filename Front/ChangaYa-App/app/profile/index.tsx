@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from "react-native-safe-area-context";
 import NavBar from "../../components/NavBar";
 
 import ProfileHeader, { type ProfileHeaderAction } from "../../components/profile/ProfileHeader";
@@ -21,6 +21,7 @@ import {
   buildInitials,
   buildDisplayName,
   mapUserToPublicProfile,
+  sanitizeText,
   type ApiPerfil,
   type ApiUser,
   type PublicProfile,
@@ -34,15 +35,35 @@ type ApiResenia = {
   'reseñaID'?: string | number;
   reseniaID?: string | number;
   comentario?: string | null;
+  comentarioDestinatario?: string | null;
+  descripcion?: string | null;
+  comment?: string | null;
   changaID?: string | number;
   changaId?: string | number;
   usuarioID?: string | number;
   usuarioId?: string | number;
   destinatarioID?: string | number;
   destinatarioId?: string | number;
+  autorNombre?: string | null;
+  autorApellido?: string | null;
+  autorNombreCompleto?: string | null;
+  autorNombreUsuario?: string | null;
+  autorUsuario?: string | null;
+  autor?: string | null;
   puntaje?: number | null;
   created_at?: string | null;
   fecha?: string | null;
+  calificacion?: number | null;
+  rating?: number | null;
+  puntajeGeneral?: number | null;
+  createdAt?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
+  fechaCreacion?: string | null;
+  fechaResenia?: string | null;
+  titulo?: string | null;
+  changaTitulo?: string | null;
+  tituloChanga?: string | null;
 };
 
 type ApiChanga = {
@@ -75,9 +96,16 @@ const formatDisplayDate = (value?: string | null) => {
   }
 };
 
-const buildChangaTitle = (changa?: ApiChanga | null, fallbackId?: string | null) => {
+const buildChangaTitle = (
+  changa?: ApiChanga | null,
+  fallbackId?: string | null,
+  titleCandidate?: string | null,
+) => {
   if (changa?.titulo) {
     return `“${changa.titulo}”`;
+  }
+  if (titleCandidate) {
+    return `“${titleCandidate}”`;
   }
   if (fallbackId) {
     return `Changa ${fallbackId}`;
@@ -85,18 +113,14 @@ const buildChangaTitle = (changa?: ApiChanga | null, fallbackId?: string | null)
   return "Changa";
 };
 
-const fetchUsersMap = async (
-  apiUrl: string,
-  ids: string[],
-  headers: Record<string, string>,
-) => {
+const fetchUsersMap = async (apiUrl: string, ids: string[]) => {
   const map = new Map<string, ApiUser>();
   if (!ids.length) return map;
 
   await Promise.all(
     ids.map(async (id) => {
       try {
-        const response = await axios.get<ApiUser>(`${apiUrl}/api/usuarios/${id}`, { headers });
+        const response = await axios.get<ApiUser>(`${apiUrl}/api/usuarios/public/${id}`);
         map.set(id, response.data);
       } catch (error) {
         console.warn("No pudimos obtener el autor de la reseña", id, error);
@@ -166,7 +190,7 @@ const fetchReviewsForUser = async (
     );
 
     const [authorsMap, changasMap] = await Promise.all([
-      fetchUsersMap(apiUrl, authorIds, headers),
+      fetchUsersMap(apiUrl, authorIds),
       fetchChangasMap(apiUrl, changaIds, headers),
     ]);
 
@@ -180,15 +204,62 @@ const fetchReviewsForUser = async (
       const changaId = normalizeId(review.changaID) ?? normalizeId(review.changaId);
       const author = authorId ? authorsMap.get(authorId) : null;
       const changa = changaId ? changasMap.get(changaId) : null;
-      const rating = typeof review.puntaje === "number" ? Math.max(0, Math.min(5, review.puntaje)) : 0;
+       const rawRatingCandidates = [
+        review.puntaje,
+        review.calificacion,
+        review.rating,
+        review.puntajeGeneral,
+      ];
+      const rawRating = rawRatingCandidates.find((value) => typeof value === "number");
+      const rating =
+        typeof rawRating === "number" ? Math.max(0, Math.min(5, rawRating)) : 0;
+
+      const rawDateValue =
+        review.fecha ??
+        review.created_at ??
+        review.createdAt ??
+        review.updated_at ??
+        review.updatedAt ??
+        review.fechaCreacion ??
+        review.fechaResenia ??
+        null;
+
+      const reviewAuthorNameCandidates = [
+        [review.autorNombre, review.autorApellido].filter(Boolean).join(" ").trim(),
+        sanitizeText(review.autorNombreCompleto ?? null),
+        sanitizeText(review.autorNombreUsuario ?? null),
+        sanitizeText(review.autorUsuario ?? null),
+        sanitizeText(review.autor ?? null),
+      ].filter(Boolean);
+
+      const reviewAuthorName = reviewAuthorNameCandidates[0] || null;
+      const contractor = author
+        ? buildDisplayName(author)
+        : reviewAuthorName || "Usuario de ChangaYa";
+
+      const commentCandidates = [
+        review.comentario,
+        review.comentarioDestinatario,
+        review.descripcion,
+        review.comment,
+      ];
+
+      const description =
+        commentCandidates.find((value) => typeof value === "string" && value.trim().length) ??
+        null;
+
+      const rawTitleCandidate =
+        sanitizeText(review.titulo ?? null) ||
+        sanitizeText(review.changaTitulo ?? null) ||
+        sanitizeText(review.tituloChanga ?? null);
 
       return {
         id: reviewId,
-        title: buildChangaTitle(changa, changaId),
-        contractor: author ? buildDisplayName(author) : authorId ? `Usuario ${authorId}` : "Usuario",
-        date: formatDisplayDate(review.fecha ?? review.created_at) ?? "Fecha no disponible",
+        title: buildChangaTitle(changa, changaId, rawTitleCandidate ?? null),
+        contractor,
+        date: formatDisplayDate(rawDateValue) ?? "Fecha no disponible",
         rating,
-        description: review.comentario?.trim() || "El autor no dejó un comentario.",
+        description: description ?? undefined,
       };
     });
   } catch (error) {
@@ -437,12 +508,18 @@ const PerfilPrivadoScreen = () => {
            <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Información de tu cuenta</Text>
           <View style={styles.infoList}>
-            {accountInfo.map((item) => (
-              <View key={item.label} style={styles.infoRow}>
-                <Text style={styles.infoLabel}>{item.label}</Text>
-                <Text style={styles.infoValue}>{item.value}</Text>
-              </View>
-            ))}
+            {accountInfo.map((item, index) => {
+              const isLast = index === accountInfo.length - 1;
+              return (
+                <View
+                  key={item.label}
+                  style={[styles.infoRow, !isLast && styles.infoRowDivider]}
+                >
+                  <Text style={styles.infoLabel}>{item.label}</Text>
+                  <Text style={styles.infoValue}>{item.value}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
 
@@ -536,7 +613,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.white,
     borderRadius: RADIUS.lg,
     padding: SPACING.lg,
-    gap: SPACING.sm,
+    gap: SPACING.md,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 10 },
@@ -551,20 +628,22 @@ const styles = StyleSheet.create({
   },
 
   infoList: {
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: SPACING.sm,
+    gap: 2,
     paddingVertical: SPACING.xs,
+  },
+  infoRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.border,
   },
   infoLabel: {
     fontSize: FONT.sm,
     color: palette.muted,
     fontFamily: fontFamilies.rounded,
-    flex: 1,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   infoValue: {
     fontSize: FONT.md,
