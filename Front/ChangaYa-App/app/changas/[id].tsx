@@ -566,33 +566,63 @@ const JobDetailsScreen = () => {
 
     
 const handleFinalizeChanga = useCallback(async () => {
-        if (!isContractor) return;
-        if (!jobDetails?.changa?.changaID) return;
-        const workerToReview = assignedWorkers?.[0];
-        
-        Alert.alert(
-            "Finalizar changa",
-            "¿Confirmás que querés finalizar esta changa? Esto te llevará a la pantalla de reseña del trabajador.",
-            [
-                { text: "Cancelar", style: "cancel" },
-                {
-                    text: "Ir a reseña",
-                    style: "destructive",
-                    onPress: () => {
-                        const changaId = jobDetails.changa.changaID;
-                        const trabajadorId = workerToReview?.id;
-                        const workerName = workerToReview?.name;
-                        if (!trabajadorId || !changaId) {
-                            Alert.alert(
-                                "Error de datos",
-                                "No se pudo identificar al trabajador a reseñar (ID: " + trabajadorId + ") o la changa (ID: " + changaId + ")."
-                            );
+    // Guards de ambas versiones
+    if (!isContractor) return;
+    if (!jobDetails?.changa?.changaID) return;
+    
+    // Obtenemos al trabajador (de la lógica 2)
+    const workerToReview = assignedWorkers?.[0];
+
+    // Alert con texto combinado
+    Alert.alert(
+        "Finalizar y Reseñar", // Título actualizado
+        "¿Confirmás que querés finalizar esta changa? Esto la marcará como 'finalizada' y te llevará a la pantalla para reseñar al trabajador.", // Mensaje actualizado
+        [
+            { text: "Cancelar", style: "cancel" },
+            {
+                text: "Confirmar", // Texto del botón actualizado
+                style: "destructive",
+                onPress: async () => {
+                    // --- INICIO LÓGICA COMBINADA ---
+
+                    // 1. Obtenemos datos y validamos (Lógica 2)
+                    const changaId = jobDetails.changa.changaID;
+                    const trabajadorId = workerToReview?.id;
+                    const workerName = workerToReview?.name;
+
+                    if (!trabajadorId || !changaId) {
+                        Alert.alert(
+                            "Error de datos",
+                            "No se pudo identificar al trabajador a reseñar (ID: " + trabajadorId + ") o la changa (ID: " + changaId + ")."
+                        );
+                        return;
+                    }
+
+                    // 2. Ejecutamos la finalización de la changa (Lógica 1)
+                    try {
+                        const token = await AsyncStorage.getItem("jwtToken");
+                        if (!token) {
+                            Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
                             return;
                         }
 
-                        console.log(`Navegando a Reseña con changaId: ${changaId}, trabajadorId: ${trabajadorId}`);
-                        const RUTA_A_PANTALLA_RESEÑA = 'resenia/reseniatrabajador'; 
+                        // (LÓGICA 1) Llamada a la API para finalizar
+                        await axios.post(
+                            `${API_URL}/api/changas/finalizar/${changaId}`,
+                            {},
+                            {
+                                headers: {
+                                    Authorization: `Bearer ${token}`,
+                                },
+                            }
+                        );
 
+                        // Si la API tuvo éxito, no mostramos el alert de "Changa finalizada",
+                        // en su lugar, navegamos.
+
+                        // (LÓGICA 2) Navegación a la reseña
+                        console.log(`Changa finalizada. Navegando a Reseña con changaId: ${changaId}, trabajadorId: ${trabajadorId}`);
+                        
                         router.push({
                             pathname: '/resenia/reseniatrabajador', 
                             params: { 
@@ -601,16 +631,31 @@ const handleFinalizeChanga = useCallback(async () => {
                                 workerName: workerName 
                             }
                         });
-                    },
+
+                        // (LÓGICA 1) Refrescamos los datos 
+                        await fetchJobDetails(); 
+
+                    } catch (err: any) {
+                        // (LÓGICA 1) Manejo de errores
+                        console.error("Error finalizando changa:", err?.response?.data || err);
+                        const backendMessage =
+                            err?.response?.data?.error || "Ocurrió un error inesperado al finalizar la changa.";
+                        Alert.alert("Error", backendMessage);
+                    }
+                    // --- FIN LÓGICA COMBINADA ---
                 },
-            ]
-        );
-    }, [
-        isContractor, 
-        jobDetails?.changa?.changaID, 
-        router,           // <--- Usamos 'router' (de useRouter)
-        assignedWorkers   // <--- 'assignedWorkers' ahora está definido antes
-    ]);
+            },
+        ]
+    );
+}, [
+    // Dependencias combinadas
+    isContractor, 
+    jobDetails?.changa?.changaID, 
+    assignedWorkers,
+    router,
+    API_URL,
+    fetchJobDetails
+]);
 
 useFocusEffect(
   useCallback(() => {
