@@ -50,3 +50,22 @@ export const deleteHabilidad = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+// POST /api/habilidades/especificas
+export const createHabilidadEspecifica = async (req, res) => {
+  try {
+    const { nombre } = req.body
+    if (!nombre) return res.status(400).json({ error: "Falta el nombre" })
+
+    const data = await createHabilidadService({
+      nombre,
+      esGeneral: false,
+      descripcion: null
+    })
+
+    res.status(201).json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+

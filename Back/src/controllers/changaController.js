@@ -70,7 +70,7 @@ const isUserAssignedToChanga = (changa, userId) => {
 export const createChanga = async (req, res) => {
   try {
     const user = req.user  // viene del JWT
-    const { titulo, descripcion, remuneracion, horaInicio, horaFin, ubicacion } = req.body
+    const { titulo, descripcion, remuneracion, horaInicio, horaFin, ubicacion, habilidades = [] } = req.body
 
     if (!titulo || !descripcion || !remuneracion || !ubicacion) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
@@ -89,7 +89,8 @@ export const createChanga = async (req, res) => {
           ubicacion,
           estado: 'iniciada',
           trabajadores: user.rol === 'trabajador' ? [user.id] : [],
-          ...(user.rol === 'contratante' ? { contratanteID: user.id } : {})
+          ...(user.rol === 'contratante' ? { contratanteID: user.id } : {}),
+          habilidades
         }
       ])
       .select()
