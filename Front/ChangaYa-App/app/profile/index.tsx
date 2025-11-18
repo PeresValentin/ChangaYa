@@ -431,7 +431,7 @@ const PerfilPrivadoScreen = () => {
 
     return [
       {
-        label: hasReviews ? "Ver reseñas" : "Sin reseñas",
+        label: hasReviews ? "Reseñas" : "Sin reseñas",
         icon: "star-outline",
         variant: "secondary",
         onPress: hasReviews ? handleScrollToReviews : undefined,
