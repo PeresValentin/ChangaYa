@@ -339,6 +339,32 @@ const JobDetailsScreen = () => {
     const [isCheckingApplication, setIsCheckingApplication] = useState(false);
 
     const coordinates = useMemo(() => parsePointCoordinates(jobDetails?.changa?.ubicacion), [jobDetails?.changa?.ubicacion]);
+    
+    const [habilidadesMap, setHabilidadesMap] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        const loadHabilidades = async () => {
+            try {
+                const token = await AsyncStorage.getItem("jwtToken");
+                const resp = await axios.get(`${API_URL}/api/habilidad`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                // Generamos el mapa { habilidadID: nombre }
+                const map: Record<string, string> = {};
+                resp.data.forEach((hab: any) => {
+                    map[hab.habilidadID] = hab.nombre;
+                });
+
+                setHabilidadesMap(map);
+            } catch (err) {
+                console.error("Error cargando habilidades", err);
+            }
+        };
+
+        loadHabilidades();
+    }, []);
+
 
     useEffect(() => {
         const loadUserData = async () => {
@@ -839,7 +865,10 @@ useFocusEffect(
     const isEnProceso = changaState === "enproceso" || changaState === "en_proceso";
     const isFinalizada = changaState === "finalizada";
     const showApplyTip = !isContractor && isIniciado;
-    const habilities = extractHabilities(changa);
+    
+    const habilities = extractHabilities(changa); // Array de IDs
+    const habilitiesNames = habilities.map(id => habilidadesMap[id] || id);
+
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
     const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
@@ -916,15 +945,16 @@ useFocusEffect(
                 {/* Habilidades */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Habilidades requeridas</Text>
-                 {habilities.length === 0 ? (
+
+                    {habilitiesNames.length === 0 ? (
                         <Text style={styles.bodyText}>
                             No existen habilidades requeridas para esta changa.
                         </Text>
                     ) : (
-                        habilities.map((req, i) => (
+                        habilitiesNames.map((name, i) => (
                             <View key={i} style={styles.requirementRow}>
                                 <Ionicons name="checkmark-circle-outline" size={18} color={palette.tint} />
-                                <Text style={styles.bodyText}>{req}</Text>
+                                <Text style={styles.bodyText}>{name}</Text>
                             </View>
                         ))
                     )}
