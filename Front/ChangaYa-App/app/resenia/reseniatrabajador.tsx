@@ -85,21 +85,26 @@ const formatCurrency = (value?: number | string | null) => { // <--- MODIFICADO
  * Procesa las habilidades de la API (string o string[])
  * al formato que espera el RatingRow ({ id, name }[])
  */
-const processSkills = (skillsData: string | string[] | null): { id: string; name: string }[] => { // <--- MODIFICADO
+const processSkills = (
+    skillsData: string | string[] | null,
+    habilidadesMap: Record<string, string>
+) => {
     if (!skillsData) return [];
+
     let skills: string[] = [];
+
     if (Array.isArray(skillsData)) {
         skills = skillsData;
     } else if (typeof skillsData === 'string') {
         skills = skillsData.split(',').map(s => s.trim()).filter(Boolean);
     }
-    // Convertir string[] a { id, name }[]
-    return skills.map(skillName => ({
-        // Creamos un ID único para el rating, ej: "Plomería" -> "plomeria"
-        id: skillName.toLowerCase().replace(/[^a-z0-9]/g, '_'), 
-        name: skillName
+
+    return skills.map(id => ({
+        id,                       // dejamos el ID para las calificaciones
+        name: habilidadesMap[id] || id  // convertimos ID → Nombre o fallback
     }));
 };
+
 // Tipo para el estado de las calificaciones
 type RatingState = {
   [key: string]: number;
@@ -146,7 +151,6 @@ const RatingRow: React.FC<RatingRowProps> = ({ id, name, rating, onRate, isSkill
   <View style={[styles.ratingRow, isSkill && styles.skillRatingRow]}>
     <View style={styles.ratingInfo}>
       <Text style={styles.ratingName}>{name}</Text>
-      {isSkill && <Text style={styles.skillTypeTag}>Habilidad de la changa</Text>}
     </View>
     <StarRating
       rating={rating}
@@ -171,8 +175,32 @@ export default function DejarResenaScreen() {
   // <--- MODIFICADO: Se inicializa vacío, se llena con useEffect
   const [allRatings, setAllRatings] = useState<RatingState | null>(null);
   const [comment, setComment] = useState('');
-   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [habilidadesMap, setHabilidadesMap] = useState<Record<string, string>>({});
+
   // <--- MODIFICADO: Efecto para cargar datos de API
+useEffect(() => {
+    const loadHabilidades = async () => {
+        try {
+            const token = await AsyncStorage.getItem("jwtToken");
+            const resp = await axios.get(`${API_URL}/api/habilidad`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            const map: Record<string, string> = {};
+            resp.data.forEach((hab: any) => {
+                map[hab.habilidadID] = hab.nombre;
+            });
+
+            setHabilidadesMap(map);
+        } catch (err) {
+            console.error("Error cargando habilidades en reseña", err);
+        }
+    };
+
+    loadHabilidades();
+}, []);
 
 useEffect(() => {
     if (!changaId || !trabajadorId) {
@@ -224,7 +252,7 @@ useEffect(() => {
             setChangaInfo({
                 titulo: changaData.titulo || 'Changa sin título',
                 precio: formatCurrency(changaData.remuneracion),
-                habilidades: processSkills(changaData.habilidades || null),
+                habilidades: processSkills(changaData.habilidades || null, habilidadesMap),
             });
 
         } catch (err: any) {
