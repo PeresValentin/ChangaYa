@@ -47,55 +47,55 @@ const EditarChangaScreen = () => {
     const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
     const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
     const [ubicacion, setUbicacion] = useState<string>('');
-    const [requisitos, setRequisitos] = useState<string[]>([ // Ejemplo inicial
-        'Experiencia en plomería',
-        'Disponibilidad inmediata',
-    ]);
-    const [nuevoRequisito, setNuevoRequisito] = useState<string>(''); // Para añadir nuevos
 
-useEffect(() => {
-    // 1. Definimos la función async DENTRO del useEffect
-    const fetchChangaData = async () => {
-        if (!id) {
-            Alert.alert("Error", "No se proporcionó un ID de changa.");
-            router.back();
-            return;
-        }
-        console.log("Cargando datos para editar changa ID:", id);
-        showLoading(); // <-- 2. Mostramos el spinner
-        try {
-            const token = await AsyncStorage.getItem("jwtToken");
-            const response = await axios.get(`${API_URL}/api/changas/detalle/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = response.data.changa; 
-            if (!data) {
-                throw new Error("La API no devolvió el objeto 'changa' esperado.");
-            }
-            // POBLAMOS LOS ESTADOS
-            
-            
-            
-            setTitulo(data.titulo || ''); // 'titulo' existe
-            setDescripcion(data.descripcion || ''); // 'descripcion' existe
-            setPrecio(String(data.remuneracion || '')); // 'remuneracion' existe
-            setEsUrgente(data.esUrgente || false); // 'esUrgente' existe
-            setUbicacion(data.ubicacion || ''); // 'ubicacion' exist
-            if (data.horaInicio) {
+    const [habilidadesBD, setHabilidadesBD] = useState<any[]>([]);
+    const [habilidadesSeleccionadas, setHabilidadesSeleccionadas] = useState<string[]>([]);
+    const [habilidadesNuevas, setHabilidadesNuevas] = useState<string[]>([]);
+    const [nuevaHabilidad, setNuevaHabilidad] = useState<string>('');
+    
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const token = await AsyncStorage.getItem("jwtToken");
+
+                // 1) Datos de la changa
+                const respChanga = await axios.get(
+                    `${API_URL}/api/changas/detalle/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                const data = respChanga.data.changa;
+
+                setTitulo(data.titulo);
+                setDescripcion(data.descripcion);
+                setPrecio(String(data.remuneracion));
+                setEsUrgente(data.esUrgente);
+                setUbicacion(data.ubicacion);
                 setScheduledDate(new Date(data.horaInicio));
+
+                // Guardamos las habilidades asignadas
+                setHabilidadesSeleccionadas(data.habilidades || []);
+
+                // 2) Cargar habilidades específicas desde el backend
+                const respHab = await axios.get(
+                    `${API_URL}/api/habilidad`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                const especificas = respHab.data.filter(h => h.esGeneral === false);
+                setHabilidadesBD(especificas);
+
+            } catch (err) {
+                console.log("Error cargando datos:", err);
+                Alert.alert("Error", "No se pudieron cargar los datos.");
+                router.back();
             }
-            setRequisitos(data.habilidades || []); // 'habilidades' existe
-        } catch (error: any) {
-            console.error("Error al cargar la changa:", error.response?.data || error.message);
-            Alert.alert("Error al cargar", "No se pudieron obtener los datos de la changa.");
-            router.back();
-        } finally {
-            hideLoading();
-        }
-    };
-    // 6. Llamamos a la función async
-    fetchChangaData();
-}, [id, API_URL, router]);
+        };
+
+        fetchData();
+    }, [id]);
+
 
     // Función para descartar los cambios y volver
     const handleDiscard = () => {
@@ -184,27 +184,24 @@ useEffect(() => {
     };
 
 // Función para guardar los cambios (¡CON CONFIRMACIÓN!)
-    const handleSaveChanges = () => { // <-- 1. La función principal ya no es 'async'
-        // 2. Mostramos la alerta de confirmación PRIMERO
+    const handleSaveChanges = () => {
         Alert.alert(
-            "Guardar Cambios", // Título de la alerta
-            "Estas seguro que deseas guardar los cambios? esto te hara perder puntos!", // Tu mensaje
+            "Guardar Cambios",
+            "¿Estás seguro que deseas guardar los cambios? Esto te hará perder puntos.",
             [
+                { text: "Cancelar", style: "cancel" },
+
                 {
-                    text: "Cancelar", // Botón 1: No hace nada
-                    style: "cancel",
-                },
-                {
-                    text: "Guardar", // Botón 2: Guarda los cambios
-                    style: "destructive", // Estilo rojo (ya que "pierde puntos")
-                    // 3. ¡TODA la lógica de guardado (async) ahora va AQUÍ DENTRO!
+                    text: "Guardar",
+                    style: "destructive",
+
                     onPress: async () => {
-                        // Validaciones básicas
+                        // 🔎 Validaciones básicas
                         if (!titulo || !descripcion || !precio) {
                             Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
                             return;
                         }
-                        // (Aquí podés llamar a showLoading() si tenés el hook)
+
                         try {
                             const token = await AsyncStorage.getItem("jwtToken");
                             if (!token) {
@@ -212,8 +209,40 @@ useEffect(() => {
                                 router.replace("/auth/login");
                                 return;
                             }
-                             const horaInicioISO = scheduledDate.toISOString();
-                            const horaFinISO = new Date(scheduledDate.getTime() + 60 * 60 * 1000).toISOString();
+
+                            // ================================
+                            // 1️⃣ Manejo de la fecha/hora
+                            // ================================
+                            const horaInicioISO = scheduledDate.toISOString();
+                            const horaFinISO = new Date(
+                                scheduledDate.getTime() + 60 * 60 * 1000
+                            ).toISOString();
+
+                            // ================================
+                            // 2️⃣ Crear habilidades nuevas
+                            // ================================
+                            let idsHabilidadesNuevas: string[] = [];
+
+                            for (const nombre of habilidadesNuevas) {
+                                const resp = await axios.post(
+                                    `${API_URL}/api/habilidad/especificas`,
+                                    { nombre },
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                );
+                                idsHabilidadesNuevas.push(resp.data.habilidadID);
+                            }
+
+                            // ================================
+                            // 3️⃣ Combinar habilidades
+                            // ================================
+                            const habilidadesFinales = [
+                                ...habilidadesSeleccionadas,
+                                ...idsHabilidadesNuevas
+                            ];
+
+                            // ================================
+                            // 4️⃣ Armar objeto final
+                            // ================================
                             const changaActualizada = {
                                 titulo,
                                 descripcion,
@@ -221,59 +250,53 @@ useEffect(() => {
                                 esUrgente,
                                 horaInicio: horaInicioISO,
                                 horaFin: horaFinISO,
+                                habilidades: habilidadesFinales
                             };
+
+                            if (!id || typeof id !== "string") {
+                                Alert.alert("Error de ID", "ID inválido para actualizar changa.");
+                                return;
+                            }
+
                             console.log("Actualizando changa ID:", id, changaActualizada);
+
+                            // ================================
+                            // 5️⃣ Enviar PUT al backend
+                            // ================================
                             const response = await axios.put(
                                 `${API_URL}/api/changas/${id}`,
                                 changaActualizada,
                                 {
                                     headers: {
-                                    "Content-Type": "application/json",
-                                    Authorization: `Bearer ${token}`,
-                                },
-                            }
-                        );
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${token}`,
+                                    }
+                                }
+                            );
 
-                        if (!id || typeof id !== 'string') {
-                        Alert.alert("Error de ID", "No se encontró el ID de la changa para guardar.");
-                        // Si tenés un 'hideLoading()', ponelo acá también
-                        return; // Cortamos la ejecución si el id no es válido
-                        }
+                            // ================================
+                            // 6️⃣ Respuesta OK
+                            // ================================
                             if (response.status === 200) {
                                 Alert.alert("✅ Changa Actualizada", "Tus cambios se guardaron con éxito.");
                                 router.replace({
-                                pathname: "/changas/[id]",
-                                params: { id: id, viewMode: "contratante" } // Pasá los mismos params que ya tenías
-                            });
+                                    pathname: "/changas/[id]",
+                                    params: { id, viewMode: "contratante" }
+                                });
                             } else {
                                 Alert.alert("Error", `El servidor respondió con código ${response.status}`);
-                        }
+                            }
+
                         } catch (error: any) {
                             console.error("Error al actualizar changa:", error.response?.data || error.message);
                             Alert.alert("Error", error.response?.data?.error || "No se pudo guardar los cambios");
-                        } finally {
-                            // (Aquí podés llamar a hideLoading() si lo usaste)
                         }
-                    },
-                },
+                    }
+                }
             ]
         );
     };
-        // Lógica para añadir un requisito (simplificada)
-    const handleAddRequisito = () => {
-        if (nuevoRequisito.trim()) {
-            setRequisitos([...requisitos, nuevoRequisito.trim()]);
-            setNuevoRequisito(''); // Limpiar input (si tuvieras uno visible)
-        } else {
-            // Opcional: podés poner una alerta si el campo está vacío
-            console.log("El requisito no puede estar vacío");
-        }
-    };
-    
-    // TODO: Lógica para quitar un requisito (opcional)
-    const handleRemoveRequisito = (indexToRemove: number) => {
-        setRequisitos(requisitos.filter((_, index) => index !== indexToRemove));
-    };
+
 
     // --- Renderizado ---
     return (
@@ -417,20 +440,72 @@ useEffect(() => {
                 </View>
 
                 <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Requisitos (opcional)</Text>
-                    {requisitos.map((req, index) => (
-                        <View key={index} style={styles.requirementItem}>
-                            <Ionicons name="checkmark-circle" size={20} color={palette.tint} />
-                            <Text style={styles.requirementText}>{req}</Text>
-                             <TouchableOpacity onPress={() => handleRemoveRequisito(index)} style={styles.removeButton}>
+                    <Text style={styles.label}>Habilidades requeridas (opcional)</Text>
+
+                    {/* Habilidades ya existentes */}
+                    {habilidadesBD.map(hab => {
+                        const selected = habilidadesSeleccionadas.includes(hab.habilidadID);
+
+                        return (
+                            <TouchableOpacity
+                                key={hab.habilidadID}
+                                style={styles.requirementItem}
+                                onPress={() => {
+                                    if (selected) {
+                                        setHabilidadesSeleccionadas(
+                                            habilidadesSeleccionadas.filter(id => id !== hab.habilidadID)
+                                        );
+                                    } else {
+                                        setHabilidadesSeleccionadas([...habilidadesSeleccionadas, hab.habilidadID]);
+                                    }
+                                }}
+                            >
+                                <Ionicons
+                                    name={selected ? "checkbox" : "square-outline"}
+                                    size={22}
+                                    color={selected ? palette.tint : palette.muted}
+                                />
+                                <Text style={styles.requirementText}>{hab.nombre}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+
+                    {/* Habilidades nuevas */}
+                    {habilidadesNuevas.map((nombre, idx) => (
+                        <View key={idx} style={styles.requirementItem}>
+                            <Ionicons name="add-circle" size={20} color={palette.tint} />
+                            <Text style={styles.requirementText}>{nombre}</Text>
+                            <TouchableOpacity
+                                onPress={() =>
+                                    setHabilidadesNuevas(habilidadesNuevas.filter((_, i) => i !== idx))
+                                }
+                            >
                                 <Ionicons name="close-circle" size={20} color={palette.muted} />
                             </TouchableOpacity>
                         </View>
                     ))}
-                    <TouchableOpacity style={styles.addRequirementButton} onPress={handleAddRequisito}>
-                        <Ionicons name="add-circle-outline" size={20} color={palette.tint} />
-                        <Text style={styles.addRequirementText}>Agregar requisito</Text>
-                    </TouchableOpacity>
+
+                    {/* Input agregar nueva habilidad */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                        <TextInput
+                            placeholder="Nueva habilidad..."
+                            placeholderTextColor={palette.muted}
+                            style={[styles.input, { flex: 1 }]}
+                            value={nuevaHabilidad}
+                            onChangeText={setNuevaHabilidad}
+                        />
+                        <TouchableOpacity
+                            style={{ marginLeft: 10 }}
+                            onPress={() => {
+                                if (nuevaHabilidad.trim().length > 0) {
+                                    setHabilidadesNuevas([...habilidadesNuevas, nuevaHabilidad.trim()]);
+                                    setNuevaHabilidad("");
+                                }
+                            }}
+                        >
+                            <Ionicons name="add-circle-outline" size={28} color={palette.tint} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
             </ScrollView>
