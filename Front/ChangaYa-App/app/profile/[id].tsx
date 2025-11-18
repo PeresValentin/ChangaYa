@@ -388,9 +388,9 @@ const PerfilPublicoScreen = () => {
           location={profile.location}
           rating={profile.rating}
           completedJobs={profile.completedJobs}
+          avatarUrl={profile.avatarUrl}
           avatarInitials={initials}
           actions={headerActions}
-          
         />
 
         <View style={styles.sectionCard}>

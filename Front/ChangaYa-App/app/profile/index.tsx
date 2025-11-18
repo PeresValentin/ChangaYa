@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Stack, useRouter, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -13,12 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NavBar from "../../components/NavBar";
 
-import ProfileHeader from "../../components/profile/ProfileHeader";
+import ProfileHeader, { type ProfileHeaderAction } from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
-import ReviewItem from "../../components/profile/ReviewItem";
+import ReviewItem, { type ReviewItemProps } from "../../components/profile/ReviewItem";
 import theme from "../../constants/theme";
 import {
   buildInitials,
+  buildDisplayName,
   mapUserToPublicProfile,
   type ApiPerfil,
   type ApiUser,
@@ -28,6 +29,174 @@ import {
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 const fontFamilies = theme.Fonts;
+
+type ApiResenia = {
+  'reseñaID'?: string | number;
+  reseniaID?: string | number;
+  comentario?: string | null;
+  changaID?: string | number;
+  changaId?: string | number;
+  usuarioID?: string | number;
+  usuarioId?: string | number;
+  destinatarioID?: string | number;
+  destinatarioId?: string | number;
+  puntaje?: number | null;
+  created_at?: string | null;
+  fecha?: string | null;
+};
+
+type ApiChanga = {
+  changaID?: string | number;
+  titulo?: string | null;
+  descripcion?: string | null;
+};
+
+type ChangaDetalleResponse = {
+  changa?: ApiChanga;
+};
+
+const normalizeId = (value?: string | number | null) => {
+  if (value === undefined || value === null) return null;
+  return String(value);
+};
+
+const formatDisplayDate = (value?: string | null) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  try {
+    return parsed.toLocaleDateString("es-AR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return parsed.toISOString().split("T")[0];
+  }
+};
+
+const buildChangaTitle = (changa?: ApiChanga | null, fallbackId?: string | null) => {
+  if (changa?.titulo) {
+    return `“${changa.titulo}”`;
+  }
+  if (fallbackId) {
+    return `Changa ${fallbackId}`;
+  }
+  return "Changa";
+};
+
+const fetchUsersMap = async (
+  apiUrl: string,
+  ids: string[],
+  headers: Record<string, string>,
+) => {
+  const map = new Map<string, ApiUser>();
+  if (!ids.length) return map;
+
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const response = await axios.get<ApiUser>(`${apiUrl}/api/usuarios/${id}`, { headers });
+        map.set(id, response.data);
+      } catch (error) {
+        console.warn("No pudimos obtener el autor de la reseña", id, error);
+      }
+    }),
+  );
+
+  return map;
+};
+
+const fetchChangasMap = async (
+  apiUrl: string,
+  ids: string[],
+  headers: Record<string, string>,
+) => {
+  const map = new Map<string, ApiChanga>();
+  if (!ids.length) return map;
+
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const response = await axios.get<ChangaDetalleResponse>(`${apiUrl}/api/changas/detalle/${id}`, { headers });
+        if (response.data?.changa) {
+          map.set(id, response.data.changa);
+        }
+      } catch (error) {
+        console.warn("No pudimos obtener la changa asociada a una reseña", id, error);
+      }
+    }),
+  );
+
+  return map;
+};
+
+const fetchReviewsForUser = async (
+  apiUrl: string,
+  userId: string,
+  headers: Record<string, string>,
+): Promise<ReviewItemProps[]> => {
+  try {
+    const response = await axios.get<ApiResenia[]>(`${apiUrl}/api/resenia`, { headers });
+    const rawReviews = Array.isArray(response.data) ? response.data : [];
+    const relevantReviews = rawReviews.filter((review) => {
+      const recipientId =
+        normalizeId(review.destinatarioID) ?? normalizeId(review.destinatarioId);
+      return recipientId === userId;
+    });
+
+    if (!relevantReviews.length) {
+      return [];
+    }
+
+    const authorIds = Array.from(
+      new Set(
+        relevantReviews
+          .map((review) => normalizeId(review.usuarioID) ?? normalizeId(review.usuarioId))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    const changaIds = Array.from(
+      new Set(
+        relevantReviews
+          .map((review) => normalizeId(review.changaID) ?? normalizeId(review.changaId))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    const [authorsMap, changasMap] = await Promise.all([
+      fetchUsersMap(apiUrl, authorIds, headers),
+      fetchChangasMap(apiUrl, changaIds, headers),
+    ]);
+
+    return relevantReviews.map((review) => {
+      const reviewId =
+        normalizeId(review['reseñaID']) ??
+        normalizeId(review.reseniaID) ??
+        `${userId}-${normalizeId(review.usuarioID ?? review.usuarioId) ?? "0"}-${normalizeId(review.changaID ?? review.changaId) ?? "0"}`;
+
+      const authorId = normalizeId(review.usuarioID) ?? normalizeId(review.usuarioId);
+      const changaId = normalizeId(review.changaID) ?? normalizeId(review.changaId);
+      const author = authorId ? authorsMap.get(authorId) : null;
+      const changa = changaId ? changasMap.get(changaId) : null;
+      const rating = typeof review.puntaje === "number" ? Math.max(0, Math.min(5, review.puntaje)) : 0;
+
+      return {
+        id: reviewId,
+        title: buildChangaTitle(changa, changaId),
+        contractor: author ? buildDisplayName(author) : authorId ? `Usuario ${authorId}` : "Usuario",
+        date: formatDisplayDate(review.fecha ?? review.created_at) ?? "Fecha no disponible",
+        rating,
+        description: review.comentario?.trim() || "El autor no dejó un comentario.",
+      };
+    });
+  } catch (error) {
+    console.error("Error al obtener las reseñas del perfil privado", error);
+    return [];
+  }
+};
+
 
 
 
@@ -39,6 +208,8 @@ const PerfilPrivadoScreen = () => {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [reviewsSectionY, setReviewsSectionY] = useState<number | null>(null);
 
   const loadProfile = useCallback(async () => {
     if (!API_URL) {
@@ -94,7 +265,10 @@ const PerfilPrivadoScreen = () => {
         }
       }
 
-      const mappedProfile = mapUserToPublicProfile(userResponse.data, perfilData, String(extractedId));
+       const reviews = await fetchReviewsForUser(API_URL, String(extractedId), headers);
+      const mappedProfile = mapUserToPublicProfile(userResponse.data, perfilData, String(extractedId), {
+        reviews,
+      });
       setProfile(mappedProfile);
     } catch (error: any) {
       console.error("Error al cargar el perfil privado", error?.response?.data || error);
@@ -108,9 +282,11 @@ const PerfilPrivadoScreen = () => {
     }
   }, [API_URL, router]);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+ useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile]),
+  );
 
   const initials = buildInitials(profile?.name ?? "");
   const generalScorePercent = useMemo(() => {
@@ -126,13 +302,24 @@ const PerfilPrivadoScreen = () => {
 
   const accountInfo = useMemo(() => {
     if (!profile) return [];
+     const roleLabel = profile.role
+      ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1)
+      : "Sin especificar";
 
-    const info = [
-      { label: "Rol en ChangaYa", value: profile.role ?? "Sin especificar" },
+     const info = [
+      { label: "Rol en ChangaYa", value: roleLabel },
       { label: "Correo electrónico", value: profile.email ?? "Email no disponible" },
       { label: "Teléfono", value: profile.phone ?? "No informado" },
       { label: "Ubicación", value: profile.location || "Ubicación sin especificar" },
     ];
+
+    const memberSince = profile.joinedAt
+      ? formatDisplayDate(profile.joinedAt) ?? profile.joinedAt
+      : null;
+
+    if (memberSince) {
+      info.push({ label: "Miembro desde", value: memberSince });
+    }
 
     if (typeof profile.completedJobs === "number") {
       info.push({ label: "Changas completadas", value: `${profile.completedJobs}` });
@@ -144,6 +331,56 @@ const PerfilPrivadoScreen = () => {
 
   const hasSkills = (profile?.topSkills?.length ?? 0) > 0;
   const hasReviews = (profile?.reviews?.length ?? 0) > 0;
+
+  const generalScoreHint = useMemo(() => {
+    if (!profile) {
+      return "Tu promedio se actualiza con cada changa completada.";
+    }
+
+    if (hasReviews) {
+      const count = profile.reviews.length;
+      return `Basado en ${count} reseña${count === 1 ? "" : "s"}.`;
+    }
+
+    if (profile.completedJobs) {
+      return `Tu promedio se actualizará con las ${profile.completedJobs} changas completadas.`;
+    }
+
+    return "Tu promedio se actualiza con cada changa completada.";
+  }, [hasReviews, profile]);
+
+  const handleScrollToReviews = useCallback(() => {
+    if (!scrollRef.current) return;
+    const target = reviewsSectionY ?? 0;
+    scrollRef.current.scrollTo({ y: Math.max(0, target - SPACING.lg), animated: true });
+  }, [reviewsSectionY]);
+
+  const headerActions = useMemo<ProfileHeaderAction[] | undefined>(() => {
+    if (!profile) return undefined;
+
+    return [
+      {
+        label: hasReviews ? "Ver reseñas" : "Sin reseñas",
+        icon: "star-outline",
+        variant: "secondary",
+        onPress: hasReviews ? handleScrollToReviews : undefined,
+        disabled: !hasReviews,
+      },
+      {
+        label: "Historial",
+        icon: "time-outline",
+        variant: "secondary",
+        onPress: () => router.push("/changas/mis"),
+      },
+      {
+        label: "Mensajes",
+        icon: "chatbubble-ellipses-outline",
+        variant: "primary",
+        onPress: () => router.push("/chats"),
+      },
+    ];
+  }, [handleScrollToReviews, hasReviews, profile, router]);
+
 
   const renderState = () => {
     if (isLoading) {
@@ -180,6 +417,7 @@ const PerfilPrivadoScreen = () => {
 
     return (
       <ScrollView
+       ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -192,9 +430,11 @@ const PerfilPrivadoScreen = () => {
           avatarInitials={initials}
           showSettings
           onSettingsPress={() => router.push("/profile/settings")}
+          avatarUrl={profile.avatarUrl}
+          actions={headerActions}
         />
         
-         <View style={styles.sectionCard}>
+           <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Información de tu cuenta</Text>
           <View style={styles.infoList}>
             {accountInfo.map((item) => (
@@ -207,7 +447,10 @@ const PerfilPrivadoScreen = () => {
         </View>
 
         <View style={styles.sectionCard}>
-           <View style={[styles.progressFill, { width: `${generalScorePercent}%` }]} />
+           <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Tu reputación general</Text>
+            <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
+          </View>
           <View style={styles.progressTrack}>
             <View
               style={[
@@ -216,12 +459,10 @@ const PerfilPrivadoScreen = () => {
               ]}
             />
           </View>
-          <Text style={styles.sectionHint}>
-            Tu promedio se actualiza con cada changa completada.
-          </Text>
+          <Text style={styles.sectionHint}>{generalScoreHint}</Text>
         </View>
 
-         {hasSkills ? (
+           {hasSkills ? (
           <SkillsList title="Top 5 habilidades" skills={profile.topSkills} />
         ) : (
           <View style={styles.sectionCard}>
@@ -232,19 +473,26 @@ const PerfilPrivadoScreen = () => {
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Sobre mí</Text>
-          <Text style={styles.bodyText}>{profile.about}</Text>
+          <Text style={styles.bodyText}>
+            {profile.about?.trim()
+              ? profile.about
+              : "Todavía no agregaste una descripción personal."}
+          </Text>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Changas realizadas recientemente</Text>
+         <View
+          style={styles.sectionCard}
+          onLayout={(event) => setReviewsSectionY(event.nativeEvent.layout.y)}
+        >
+          <Text style={styles.sectionTitle}>Tus reseñas</Text>
           <View style={styles.reviewList}>
-             {hasReviews
-              ? profile.reviews.map((review) => <ReviewItem key={review.id} {...review} />)
-              : (
-                  <Text style={styles.bodyTextMuted}>
-                    Todavía no hay reseñas disponibles.
-                  </Text>
-                )}
+            {hasReviews ? (
+              profile.reviews.map((review) => <ReviewItem key={review.id} {...review} />)
+            ) : (
+              <Text style={styles.bodyTextMuted}>
+                Todavía no hay reseñas disponibles.
+              </Text>
+            )}
           </View>
         </View>
       </ScrollView>

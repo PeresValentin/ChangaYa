@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import {
+   Image,
   StyleProp,
   StyleSheet,
   Text,
@@ -32,6 +33,7 @@ interface ProfileHeaderProps {
   rating: number;
   completedJobs?: number;
   avatarInitials: string;
+   avatarUrl?: string | null;
   actions?: ProfileHeaderAction[];
   showSettings?: boolean;
   onSettingsPress?: () => void;
@@ -44,18 +46,25 @@ const ProfileHeader = ({
   rating,
   completedJobs,
   avatarInitials,
+  avatarUrl,
   actions,
   showSettings,
   onSettingsPress,
   style,
 }: ProfileHeaderProps) => {
+    const renderAvatarContent = () => {
+    if (avatarUrl) {
+      return <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />;
+    }
+
+    return <Text style={styles.avatarInitials}>{avatarInitials}</Text>;
+  };
+
   return (
     <View style={[styles.card, style]}>
       <View style={styles.topRow}>
         <View style={styles.avatarWrapper}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{avatarInitials}</Text>
-          </View>
+          <View style={[styles.avatar, avatarUrl && styles.avatarWithImage]}>{renderAvatarContent()}</View>
           <View style={styles.info}>
             <Text style={styles.name}>{name}</Text>
             <View style={styles.locationRow}>
@@ -108,7 +117,7 @@ const ProfileHeader = ({
                 action.variant === "secondary"
                   ? styles.actionButtonSecondary
                   : styles.actionButtonPrimary,
-                  action.disabled && styles.actionButtonDisabled,
+                 action.disabled && styles.actionButtonDisabled,
               ]}
               onPress={action.disabled ? undefined : action.onPress}
               disabled={action.disabled}
@@ -168,6 +177,14 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tint,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+  },
+  avatarWithImage: {
+    backgroundColor: palette.white,
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitials: {
     color: palette.white,

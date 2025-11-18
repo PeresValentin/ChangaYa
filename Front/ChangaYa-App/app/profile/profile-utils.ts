@@ -3,6 +3,10 @@ import type { ReviewItemProps } from "../../components/profile/ReviewItem";
 
 export type ApiPerfil = {
   descripcion?: string | null;
+  foto?: string | null;
+  fotoURL?: string | null;
+  perfilID?: string | number;
+  usuarioID?: string | number;
 };
 
 export type ApiUser = {
@@ -34,6 +38,15 @@ export type ApiUser = {
   rankingGeneral?: number | null;
   changasCompletadas?: number | null;
   changasRealizadas?: number | null;
+  rol?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  fechaCreacion?: string | null;
+  fechaRegistro?: string | null;
+  fechaAlta?: string | null;
+  foto?: string | null;
+  avatarUrl?: string | null;
+  avatar?: string | null;
 };
 
 export type PublicProfile = {
@@ -49,6 +62,8 @@ export type PublicProfile = {
   about: string;
   topSkills: SkillItem[];
   reviews: ReviewItemProps[];
+  avatarUrl?: string | null;
+  joinedAt?: string | null;
 };
 
 export const sanitizeText = (value?: string | null) => {
@@ -120,10 +135,50 @@ export const buildPhone = (user: ApiUser) => {
   return candidates[0] || null;
 };
 
+const parseDateValue = (value?: string | number | null) => {
+  if (value === undefined || value === null) return null;
+  const parsed = typeof value === "number" ? new Date(value) : new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+};
+
+const buildJoinedDate = (user: ApiUser) => {
+  const candidates = [
+    user.created_at,
+    user.createdAt,
+    user.fechaCreacion,
+    user.fechaRegistro,
+    user.fechaAlta,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseDateValue(candidate ?? null);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const buildAvatarUrl = (user: ApiUser, perfil: ApiPerfil | null) => {
+  const candidates = [
+    sanitizeText(perfil?.fotoURL ?? null),
+    sanitizeText((perfil?.foto as string) ?? null),
+    sanitizeText((user as any)?.avatarUrl ?? null),
+    sanitizeText((user as any)?.avatar ?? null),
+    sanitizeText((user as any)?.foto ?? null),
+  ].filter(Boolean);
+
+  return candidates[0] || null;
+};
+
+
 export const mapUserToPublicProfile = (
   user: ApiUser,
   perfil: ApiPerfil | null,
   fallbackId: string,
+  extras?: Partial<Pick<PublicProfile, "reviews" | "topSkills">>,
 ): PublicProfile => {
   const rating = typeof user.rankingGeneral === "number" ? user.rankingGeneral : 0;
   const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : null;
@@ -133,6 +188,8 @@ export const mapUserToPublicProfile = (
       : typeof user.changasRealizadas === "number"
       ? user.changasRealizadas
       : undefined;
+      const topSkills = extras?.topSkills ?? parseSkills(user.habilidades);
+  const reviews = extras?.reviews ?? [];
 
   const aboutText =
     sanitizeText(perfil?.descripcion) ||
@@ -148,14 +205,16 @@ export const mapUserToPublicProfile = (
     name: buildDisplayName(user),
     location: buildLocation(user),
     rating,
-    role: user.tipoUsuario ?? null,
+     role: user.tipoUsuario ?? user.rol ?? null,
     completedJobs,
     generalScore: normalizedScore,
-     email: buildEmail(user),
+      email: buildEmail(user),
     phone: buildPhone(user),
+      avatarUrl: buildAvatarUrl(user, perfil),
+    joinedAt: buildJoinedDate(user),
     about: aboutText,
-    topSkills: parseSkills(user.habilidades),
-    reviews: [],
+     topSkills,
+    reviews,
   };
 };
 
