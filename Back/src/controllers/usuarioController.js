@@ -6,6 +6,12 @@ import { transporter } from '../config/mailer.js'
 const JWT_EMAIL_SECRET = process.env.JWT_EMAIL_SECRET
 const JWT_SECRET = process.env.JWT_SECRET
 
+const capitalize = (str = "") =>
+  str
+    .toLowerCase()
+    .trim()
+    .replace(/^\w/, c => c.toUpperCase());
+
 
 // Obtener todos los usuarios
 export const getUsuarios = async (req, res) => {
@@ -179,7 +185,11 @@ const getErrorHtml = (errorMessage = 'El enlace de verificación ha caducado o e
 // Crear nuevo usuario
 export const createUsuario = async (req, res) => {
   try {
-    const { nombreUsuario, clave, nombre, apellido, dni, email, telefono, tipoUsuario } = req.body
+    let { nombreUsuario, clave, nombre, apellido, dni, email, telefono, tipoUsuario } = req.body;
+
+    // Normalizar nombre y apellido
+    nombre = capitalize(nombre);
+    apellido = capitalize(apellido);
 
     if (!nombreUsuario || !dni || !email || !clave) {
       return res.status(400).json({ error: 'Faltan: nombreUsuario, dni, email o clave.' })
