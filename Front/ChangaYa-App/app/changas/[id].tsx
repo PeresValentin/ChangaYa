@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 
 import {
     ScrollView,
@@ -308,7 +309,7 @@ const JobDetailsScreen = () => {
     const { goToProfile } = useProfileNavigation();
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
     const router = useRouter();
-
+    const navigation = useNavigation();
     // Rol real del usuario autenticado (trabajador / contratante)
     const [userRole, setUserRole] = useState<"trabajador" | "contratante" | null>(null);
 
@@ -495,6 +496,23 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, checkExistingApplication, currentUserId, hasApplied, isContractor, jobDetails?.changa?.changaID]);
 
+    const applicants = useMemo<PersonSummary[]>(() => {
+        if (!jobDetails?.postulaciones) return [];
+        return jobDetails.postulaciones
+            .map((post) => toPersonSummary(post.usuario))
+             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
+    }, [jobDetails?.postulaciones]);
+    const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
+
+    const assignedWorkers = useMemo(() => {
+        if (!isContractor) return [];
+
+        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
+        if (assignedIDs.length === 0) return [];
+
+        return applicants.filter((a) => assignedIDs.includes(a.id));
+    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
+
     const handleCloseApplications = useCallback(async () => {
         if (!isContractor) return;
         if (!jobDetails?.changa?.changaID) return;
@@ -546,54 +564,53 @@ const JobDetailsScreen = () => {
         );
     }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
 
-    const handleFinalizeChanga = useCallback(async () => {
+    
+const handleFinalizeChanga = useCallback(async () => {
         if (!isContractor) return;
         if (!jobDetails?.changa?.changaID) return;
-
+        const workerToReview = assignedWorkers?.[0];
+        
         Alert.alert(
             "Finalizar changa",
-            "¿Confirmás que querés finalizar esta changa? Esto permitirá que los actores dejen sus reseñas.",
+            "¿Confirmás que querés finalizar esta changa? Esto te llevará a la pantalla de reseña del trabajador.",
             [
                 { text: "Cancelar", style: "cancel" },
                 {
-                    text: "Finalizar",
+                    text: "Ir a reseña",
                     style: "destructive",
-                    onPress: async () => {
-                        try {
-                            const token = await AsyncStorage.getItem("jwtToken");
-                            if (!token) {
-                                Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
-                                return;
-                            }
-
-                            const response = await axios.post(
-                                `${API_URL}/api/changas/finalizar/${jobDetails.changa.changaID}`,
-                                {},
-                                {
-                                    headers: {
-                                        Authorization: `Bearer ${token}`,
-                                    },
-                                }
-                            );
-
+                    onPress: () => {
+                        const changaId = jobDetails.changa.changaID;
+                        const trabajadorId = workerToReview?.id;
+                        const workerName = workerToReview?.name;
+                        if (!trabajadorId || !changaId) {
                             Alert.alert(
-                                "Changa finalizada",
-                                "La changa pasó a estado 'finalizada'. Se generaron las reseñas necesarias."
+                                "Error de datos",
+                                "No se pudo identificar al trabajador a reseñar (ID: " + trabajadorId + ") o la changa (ID: " + changaId + ")."
                             );
-
-                            await fetchJobDetails(); // refrescar la pantalla
-
-                        } catch (err: any) {
-                            console.error("Error finalizando changa:", err?.response?.data || err);
-                            const backendMessage =
-                                err?.response?.data?.error || "Ocurrió un error inesperado.";
-                            Alert.alert("Error", backendMessage);
+                            return;
                         }
+
+                        console.log(`Navegando a Reseña con changaId: ${changaId}, trabajadorId: ${trabajadorId}`);
+                        const RUTA_A_PANTALLA_RESEÑA = 'resenia/reseniatrabajador'; 
+
+                        router.push({
+                            pathname: '/resenia/reseniatrabajador', 
+                            params: { 
+                                changaId: changaId,
+                                trabajadorId: trabajadorId,
+                                workerName: workerName 
+                            }
+                        });
                     },
                 },
             ]
         );
-    }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
+    }, [
+        isContractor, 
+        jobDetails?.changa?.changaID, 
+        router,           // <--- Usamos 'router' (de useRouter)
+        assignedWorkers   // <--- 'assignedWorkers' ahora está definido antes
+    ]);
 
 useFocusEffect(
   useCallback(() => {
@@ -682,23 +699,11 @@ useFocusEffect(
         };
     }, [jobDetails?.changa?.direccion, coordinates?.latitude, coordinates?.longitude]);
 
-    const applicants = useMemo<PersonSummary[]>(() => {
-        if (!jobDetails?.postulaciones) return [];
-        return jobDetails.postulaciones
-            .map((post) => toPersonSummary(post.usuario))
-             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
-    }, [jobDetails?.postulaciones]);
 
-    const assignedWorkers = useMemo(() => {
-        if (!isContractor) return [];
 
-        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
-        if (assignedIDs.length === 0) return [];
 
-        return applicants.filter((a) => assignedIDs.includes(a.id));
-    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
 
-    const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
+
 
     const profile = isContractor ? assignedWorkers : contractorSummary;
     const profileLabel =
