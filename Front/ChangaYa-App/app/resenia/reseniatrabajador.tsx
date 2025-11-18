@@ -203,6 +203,9 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
+
+    if (Object.keys(habilidadesMap).length === 0) return;
+
     if (!changaId || !trabajadorId) {
         setError("Faltan IDs de changa o trabajador.");
         setIsLoading(false);
@@ -265,7 +268,7 @@ useEffect(() => {
 
     fetchChangaData();
 
-  }, [API_URL, changaId, trabajadorId, workerName]);
+  }, [API_URL, changaId, trabajadorId, workerName, habilidadesMap]);
   // <--- MODIFICADO: Efecto para inicializar ratings DESPUÉS del fetch
   useEffect(() => {
     if (changaInfo) { // Solo se ejecuta cuando changaInfo tiene datos
