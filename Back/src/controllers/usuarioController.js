@@ -101,18 +101,63 @@ export const createUsuario = async (req, res) => {
     // Link de verificación (podés reemplazar localhost por tu dominio)
     const verificationLink = `http://localhost:3000/api/usuarios/verificar?token=${verificationToken}`
 
+    const displayName = nombre || nombreUsuario || 'Changayer'
+
     // Enviar el mail
     await transporter.sendMail({
       from: `"ChangaYa!" <${process.env.MAIL_USER}>`,
       to: email,
       subject: 'Verificá tu cuenta en ChangaYa!',
-      html: `
-        <h2>¡Hola ${nombre}!</h2>
-        <p>Gracias por registrarte en <b>ChangaYa!</b>.</p>
-        <p>Por favor verificá tu cuenta haciendo clic en el siguiente enlace:</p>
-        <a href="${verificationLink}" target="_blank">${verificationLink}</a>
-        <p>Este enlace expira en 30 minutos.</p>
-      `
+       html: `<!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Verificación de cuenta</title>
+        </head>
+        <body style="margin:0;padding:0;background-color:#f5f7f2;font-family:'Helvetica Neue',Arial,sans-serif;color:#1f2a24;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f5f7f2;padding:24px 0;">
+            <tr>
+              <td align="center">
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(20,34,25,0.08);">
+                  <tr>
+                    <td style="background:linear-gradient(120deg,#5f7c4b,#7ea463);padding:32px 40px;text-align:left;">
+                      <p style="margin:0;font-size:14px;letter-spacing:1px;text-transform:uppercase;color:#e8f2dc;font-weight:600;">ChangaYa!</p>
+                      <h1 style="margin:8px 0 0;font-size:26px;line-height:1.3;color:#ffffff;font-weight:700;">Confirmá tu cuenta</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:32px 40px;">
+                      <p style="margin:0 0 16px;font-size:16px;">Hola <strong>${displayName}</strong>,</p>
+                      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#2f3a32;">
+                        ¡Gracias por unirte a <strong>ChangaYa!</strong> Solo falta un paso para activar tu cuenta.
+                        Por favor verificá tu correo haciendo clic en el botón inferior. El enlace caduca en 30 minutos.
+                      </p>
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:32px 0;">
+                        <tr>
+                          <td align="center" bgcolor="#5f7c4b" style="border-radius:999px;">
+                            <a href="${verificationLink}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;font-family:'Helvetica Neue',Arial,sans-serif;">
+                              Verificar cuenta
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                      <p style="margin:0 0 8px;font-size:14px;color:#566354;">Si el botón no funciona, copiá y pegá este enlace en tu navegador:</p>
+                      <p style="margin:0;font-size:13px;word-break:break-all;color:#7b8979;"><a href="${verificationLink}" target="_blank" style="color:#5f7c4b;text-decoration:none;">${verificationLink}</a></p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:24px 40px;border-top:1px solid #e6ebdf;background-color:#f9faf6;text-align:center;">
+                      <p style="margin:0 0 4px;font-size:12px;color:#8b9689;">Este correo se envió automáticamente, por favor no respondas.</p>
+                      <p style="margin:0;font-size:12px;color:#8b9689;">© ${new Date().getFullYear()} ChangaYa! · Todos los derechos reservados</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>`
     })
 
     res.status(200).json({
