@@ -2,7 +2,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLoading } from '../../../hooks/LoadingContext';
@@ -10,6 +10,7 @@ import {
     Alert,
     ScrollView,
     StyleSheet,
+    Modal,
     Switch,
     Text,
     TextInput,
@@ -20,7 +21,10 @@ import {
 } from 'react-native';
 import theme from '../../../constants/theme'; // Importa tu tema
 import { SafeAreaView } from 'react-native-safe-area-context';
-
+import DateTimePicker, {
+    DateTimePickerAndroid,
+    DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 // Constantes del tema
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -39,8 +43,9 @@ const EditarChangaScreen = () => {
     const [descripcion, setDescripcion] = useState<string>('');
     const [precio, setPrecio] = useState<string>('');
     const [esUrgente, setEsUrgente] = useState<boolean>(false);
-    const [fecha, setFecha] = useState<string>('Hoy'); // Placeholder, idealmente un Date
-    const [hora, setHora] = useState<string>('10:00 AM'); // Placeholder
+     const [scheduledDate, setScheduledDate] = useState<Date>(new Date());
+    const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+    const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
     const [ubicacion, setUbicacion] = useState<string>('');
     const [requisitos, setRequisitos] = useState<string[]>([ // Ejemplo inicial
         'Experiencia en plomería',
@@ -76,6 +81,9 @@ useEffect(() => {
             setPrecio(String(data.remuneracion || '')); // 'remuneracion' existe
             setEsUrgente(data.esUrgente || false); // 'esUrgente' existe
             setUbicacion(data.ubicacion || ''); // 'ubicacion' exist
+            if (data.horaInicio) {
+                setScheduledDate(new Date(data.horaInicio));
+            }
             setRequisitos(data.habilidades || []); // 'habilidades' existe
         } catch (error: any) {
             console.error("Error al cargar la changa:", error.response?.data || error.message);
@@ -99,6 +107,80 @@ useEffect(() => {
             { text: "Salir", style: "destructive", onPress: () => router.back() }
         ]
             );
+    };
+
+    const formatDate = useMemo(
+        () => (date: Date) =>
+            date.toLocaleDateString('es-AR', {
+                weekday: 'short',
+                day: '2-digit',
+                month: 'short',
+            }),
+        []
+    );
+
+    const formatTime = useMemo(
+        () => (date: Date) =>
+            date.toLocaleTimeString('es-AR', {
+                hour: '2-digit',
+                minute: '2-digit',
+            }),
+        []
+    );
+
+    const applyDateChange = (nextDate: Date) => {
+        const updated = new Date(scheduledDate);
+        updated.setFullYear(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
+        setScheduledDate(updated);
+    };
+
+    const applyTimeChange = (nextDate: Date) => {
+        const updated = new Date(scheduledDate);
+        updated.setHours(nextDate.getHours(), nextDate.getMinutes(), 0, 0);
+        setScheduledDate(updated);
+    };
+
+    const handleDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+        if (selectedDate) {
+            applyDateChange(selectedDate);
+        }
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+        }
+    };
+
+    const handleTimeChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+        if (selectedDate) {
+            applyTimeChange(selectedDate);
+        }
+        if (Platform.OS === 'android') {
+            setShowTimePicker(false);
+        }
+    };
+
+    const openDatePicker = () => {
+        if (Platform.OS === 'android') {
+            DateTimePickerAndroid.open({
+                mode: 'date',
+                value: scheduledDate,
+                onChange: handleDateChange,
+            });
+        } else {
+            setShowDatePicker(true);
+        }
+    };
+
+    const openTimePicker = () => {
+        if (Platform.OS === 'android') {
+            DateTimePickerAndroid.open({
+                mode: 'time',
+                value: scheduledDate,
+                is24Hour: true,
+                onChange: handleTimeChange,
+            });
+        } else {
+            setShowTimePicker(true);
+        }
     };
 
 // Función para guardar los cambios (¡CON CONFIRMACIÓN!)
@@ -130,11 +212,15 @@ useEffect(() => {
                                 router.replace("/auth/login");
                                 return;
                             }
+                             const horaInicioISO = scheduledDate.toISOString();
+                            const horaFinISO = new Date(scheduledDate.getTime() + 60 * 60 * 1000).toISOString();
                             const changaActualizada = {
                                 titulo,
                                 descripcion,
                                 remuneracion: parseFloat(precio),
-                                // ... (otros campos)
+                                esUrgente,
+                                horaInicio: horaInicioISO,
+                                horaFin: horaFinISO,
                             };
                             console.log("Actualizando changa ID:", id, changaActualizada);
                             const response = await axios.put(
@@ -264,19 +350,51 @@ useEffect(() => {
                  <View style={styles.rowContainer}>
                     <View style={[styles.fieldContainer, { flex: 1 }]}>
                         <Text style={styles.label}>Fecha necesaria *</Text>
-                        <TouchableOpacity style={styles.dateButton}>
+                         <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>
                             <Ionicons name="calendar-outline" size={20} color={palette.tint} style={styles.iconLeft} />
-                            <Text style={styles.dateButtonText}>{fecha}</Text>
+                            <Text style={styles.dateButtonText}>{formatDate(scheduledDate)}</Text>
                         </TouchableOpacity>
                     </View>
                      <View style={[styles.fieldContainer, { flex: 1 }]}>
                         <Text style={styles.label}>Hora</Text>
-                        <TouchableOpacity style={styles.dateButton}>
+                          <TouchableOpacity style={styles.dateButton} onPress={openTimePicker}>
                              <Ionicons name="time-outline" size={20} color={palette.tint} style={styles.iconLeft} />
-                            <Text style={styles.dateButtonText}>{hora}</Text>
+                              <Text style={styles.dateButtonText}>{formatTime(scheduledDate)}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                {Platform.OS === 'ios' && (showDatePicker || showTimePicker) && (
+                    <Modal
+                        transparent
+                        animationType="fade"
+                        visible={showDatePicker || showTimePicker}
+                        onRequestClose={() => {
+                            setShowDatePicker(false);
+                            setShowTimePicker(false);
+                        }}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalContent}>
+                                <DateTimePicker
+                                    mode={showDatePicker ? 'date' : 'time'}
+                                    display="spinner"
+                                    value={scheduledDate}
+                                    onChange={showDatePicker ? handleDateChange : handleTimeChange}
+                                />
+                                <TouchableOpacity
+                                    style={styles.modalConfirmButton}
+                                    onPress={() => {
+                                        setShowDatePicker(false);
+                                        setShowTimePicker(false);
+                                    }}
+                                >
+                                    <Text style={styles.modalConfirmText}>Listo</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Modal>
+                )}
 
                 <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Ubicación *</Text>
@@ -530,6 +648,30 @@ const styles = StyleSheet.create({
       color: palette.white,
       fontSize: FONT.md,
       fontWeight: 'bold',
+  },
+  modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  modalContent: {
+      width: '80%',
+      backgroundColor: palette.white,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      alignItems: 'center',
+      gap: SPACING.md,
+  },
+  modalConfirmButton: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      backgroundColor: palette.tint,
+      borderRadius: RADIUS.lg,
+  },
+  modalConfirmText: {
+      color: palette.white,
+      fontWeight: '600',
   },
 });
 
