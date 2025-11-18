@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, usePathname, useRouter, type Href } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useMemo, useState, useEffect } from 'react';
 import {
     ScrollView,
@@ -11,7 +11,7 @@ import {
 import axios from "axios";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
-import { useProfileNavigation } from '../../hooks/use-profile-navigation';
+import NavBar from '../../components/NavBar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { FONT, SPACING, RADIUS } = theme;
@@ -158,9 +158,6 @@ const ChangaCard: React.FC<{ changa: Changa }> = ({ changa }) => {
 // ------------------ Main Screen --------------------
 export default function MisChangasScreen() {
     const router = useRouter();
-    const pathname = usePathname();
-
-    const { goToProfile } = useProfileNavigation();
     const [activeFilter, setActiveFilter] = useState<JobStatus>('abierta');
 
     const [userRole, setUserRole] = useState<"trabajador" | "contratante" | null>(null);
@@ -332,6 +329,7 @@ export default function MisChangasScreen() {
                     )}
 
                 </ScrollView>
+                 <NavBar />
             </View>
         </SafeAreaView>
     );
