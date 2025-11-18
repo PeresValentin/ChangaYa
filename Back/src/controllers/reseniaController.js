@@ -1,17 +1,18 @@
 import {
-  createReseniaService,
   getReseniasService,
   getReseniaByIdService,
   updateReseniaService,
-  deleteReseniaService
+  deleteReseniaService,
+  submitReseniaCompletaService
 } from '../services/reseniaService.js'
 
 export const createResenia = async (req, res) => {
   try {
-    const data = await createReseniaService(req.body)
+    const data = await submitReseniaCompletaService(req.body, req.user)
     res.status(201).json(data)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+     const status = /Falta|autor|dirigida/.test(err.message) ? 400 : 500
+    res.status(status).json({ error: err.message })
   }
 }
 

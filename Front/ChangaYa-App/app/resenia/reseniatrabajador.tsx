@@ -167,10 +167,11 @@ export default function DejarResenaScreen() {
   const [error, setError] = useState<string | null>(null);
   const [workerInfo, setWorkerInfo] = useState({ name: 'Cargando...', initials: '?' });
   const [changaInfo, setChangaInfo] = useState<{ titulo: string; precio: string; habilidades: { id: string; name: string }[] } | null>(null);
-  // --- Estados del Formulario ---
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // <--- MODIFICADO: Se inicializa vacío, se llena con useEffect
   const [allRatings, setAllRatings] = useState<RatingState | null>(null);
   const [comment, setComment] = useState('');
+   const [isSubmitting, setIsSubmitting] = useState(false);
   // <--- MODIFICADO: Efecto para cargar datos de API
 
 useEffect(() => {
@@ -180,9 +181,7 @@ useEffect(() => {
         return;
     }
 
-    // --- 1. SETEAMOS LA INFO DEL TRABAJADOR (YA LA TENEMOS) ---
-    // Usamos el 'workerName' que viene de los params.
-    const name = workerName || 'Usuario'; 
+     const name = workerName || 'Usuario'; 
     setWorkerInfo({
         name: name,
         initials: buildInitials(name),
@@ -191,12 +190,27 @@ useEffect(() => {
     // --- 2. BUSCAMOS SOLO LA INFO DE LA CHANGA ---
     const fetchChangaData = async () => {
         try {
-            // 'isLoading' ya está en true por defecto, 
-            // no lo seteamos de nuevo para evitar parpadeos.
+             const storedUser = await AsyncStorage.getItem('userData');
+            if (!storedUser) {
+                Alert.alert("Error", "No se pudo identificar al contratante.");
+                setError("No se pudo cargar tu sesión.");
+                setIsLoading(false);
+                return;
+            }
+            const parsedUser = JSON.parse(storedUser);
+            const resolvedUserId = parsedUser?.usuarioID || parsedUser?.id || parsedUser?.userId || parsedUser?._id;
+            if (!resolvedUserId) {
+                Alert.alert("Error", "No se encontró tu ID de usuario.");
+                setError("No se encontró tu ID de usuario.");
+                setIsLoading(false);
+                return;
+            }
+            setCurrentUserId(String(resolvedUserId));
             
             const token = await AsyncStorage.getItem("jwtToken");
             if (!token) {
                 Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+                setError("Tu sesión expiró. Iniciá sesión nuevamente.");
                 setIsLoading(false);
                 return;
             }
@@ -217,13 +231,13 @@ useEffect(() => {
             console.error("Error cargando datos de la changa:", err);
             setError("No se pudieron cargar los datos de la changa.");
         } finally {
-            setIsLoading(false); // Marcamos que la carga (de la changa) terminó
+           setIsLoading(false);
         }
     };
 
-    fetchChangaData(); // <-- Llamamos a la función
-    
-  }, [changaId, trabajadorId, workerName]);
+    fetchChangaData();
+
+  }, [API_URL, changaId, trabajadorId, workerName]);
   // <--- MODIFICADO: Efecto para inicializar ratings DESPUÉS del fetch
   useEffect(() => {
     if (changaInfo) { // Solo se ejecuta cuando changaInfo tiene datos
@@ -252,6 +266,7 @@ useEffect(() => {
   // --- Lógica de Envío ---
   // <--- MODIFICADO: Lógica de API real
   const handlePublish = async () => {
+     if (isSubmitting) return;
     // Validar que los ratings estén inicializados
     if (!allRatings) {
         Alert.alert("Error", "El formulario de calificación aún no está listo.");
@@ -262,35 +277,43 @@ useEffect(() => {
       Alert.alert("Faltan Calificaciones", "Por favor, califica todos los aspectos y habilidades antes de publicar.");
       return;
     }
+     if (!currentUserId || !changaId || !trabajadorId) {
+        Alert.alert("Error de Datos", "Faltan IDs para enviar la reseña. Intentá volver y reingresar.");
+        return;
+    }
     try {
+        setIsSubmitting(true);
         const token = await AsyncStorage.getItem("jwtToken");
         if (!token) {
             Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+             setIsSubmitting(false);
             return;
         }
         const headers = { Authorization: `Bearer ${token}` };
-        // --- POST 1: Enviar la reseña ---
-        // (Ajusta este endpoint y payload a tu backend)
+        const skillLabelMap = new Map((changaInfo?.habilidades ?? []).map(skill => [skill.id, skill.name]));
+        const generalLabelMap = new Map(GENERAL_CRITERIA.map(criterion => [criterion.id, criterion.name]));
+        const ratingDetails = Object.entries(allRatings).map(([ratingId, value]) => ({
+            id: ratingId,
+            nombre: skillLabelMap.get(ratingId) || generalLabelMap.get(ratingId) || ratingId,
+            calificacion: value,
+        })).filter(detail => detail.calificacion > 0);
         const reviewPayload = {
-            changaId: changaId,
-            trabajadorId: trabajadorId,
-            comentario: comment,
-            ratings: allRatings, // Objeto con { actitud: 5, plomeria: 4, ... }
+           changaId,
+            trabajadorId,
+            contratanteId: currentUserId,
+            destinatarioId: trabajadorId,
+            comentario: comment.trim(),
+            ratings: ratingDetails,
         };
-        console.log("Enviando reseña:", reviewPayload);
-        // (Descomentar uando el endpoint esté listo)
-        // await axios.post(`${API_URL}/api/reseñas`, reviewPayload, { headers });
-        // --- POST 2: Finalizar la changa (la lógica que movimos) ---
-        console.log("Finalizando changa:", changaId);
-        // (Descomentar cuando el endpoint esté listo)
-        // await axios.post(`${API_URL}/api/changas/finalizar/${changaId}`, {}, { headers });
-        // --- Éxito ---
-        Alert.alert("Reseña Publicada", "¡Gracias por tu opinión! La changa ha sido finalizada.");
-        router.back(); // Volver atrás
+         await axios.post(`${API_URL}/api/resenia`, reviewPayload, { headers });
+        Alert.alert("Reseña Publicada", "¡Gracias por tu opinión!");
+        router.back();
     } catch (err: any) {
         console.error("Error publicando reseña o finalizando changa:", err?.response?.data || err);
         const backendMessage = err?.response?.data?.error || "Ocurrió un error inesperado.";
         Alert.alert("Error", backendMessage);
+         } finally {
+        setIsSubmitting(false);
     }
   };
   const handleCancel = () => {

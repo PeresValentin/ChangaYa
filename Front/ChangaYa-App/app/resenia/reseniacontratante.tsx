@@ -24,9 +24,9 @@ const palette = theme.Colors.light;
 // LISTA FIJA DE CRITERIOS (Para el Contratante)
 // =========================================================
 const CONTRATANTE_CRITERIA = [
-  { id: 'claridad', name: 'Claridad en las indicaciones' },
-  { id: 'respeto', name: 'Respeto y trato' },
-  { id: 'pago', name: 'Paga en tiempo y forma' },
+ { id: 'claridad', name: 'Claridad en las Indicaciones' },
+  { id: 'respeto', name: 'Respeto y Tratos' },
+  { id: 'pago', name: 'Paga en Tiempo y Forma' },
   { id: 'responsabilidad', name: 'Responsabilidad' },
   { id: 'puntualidad', name: 'Puntualidad' },
 ];
@@ -165,26 +165,25 @@ export default function DejarResenaContratanteScreen() {
         Alert.alert("Sesión Expirada", "Iniciá sesión nuevamente.");
         return;
     }
-    // Mapeamos los IDs de los criterios a los nombres que espera el backend
-    // (Ej: 'claridad' -> 'calificacion_claridad')
-    const calificacionesPayload: { [key: string]: number } = {};
-    for (const key in allRatings) {
-        calificacionesPayload[`calificacion_${key}`] = allRatings[key];
-    }
-    // Construimos el Payload final
+     const ratingDetails = Object.entries(allRatings).map(([ratingId, ratingValue]) => ({
+        id: ratingId,
+        nombre: CONTRATANTE_CRITERIA.find(criterion => criterion.id === ratingId)?.name || ratingId,
+        calificacion: ratingValue
+    })).filter(detail => detail.calificacion > 0);
     const payload = {
-        changaId: changaId,
-        contratanteId: contratanteId, // El ID del reseñado
-        // El 'trabajadorId' (reseñador) debería ser inferido por el backend desde el token JWT
+        changaId,
+        contratanteId,
+        trabajadorId: currentUserId,
+        destinatarioId: contratanteId,
         comentario: comment.trim(),
-        ...calificacionesPayload // (calificacion_claridad, calificacion_respeto, etc.)
+        ratings: ratingDetails
     };
     
     setIsLoading(true);
     try {
         console.log("Enviando reseña de contratante:", payload);
         // ¡OJO! Aseguratque este sea tu endpoint correcto en el backend
-        const ENDPOINT = `${API_URL}/api/resenas`; 
+         const ENDPOINT = `${API_URL}/api/resenia`;
         await axios.post(ENDPOINT, payload, {
             headers: { Authorization: `Bearer ${token}` }
         });

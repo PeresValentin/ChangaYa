@@ -156,6 +156,211 @@ export const createReseniaService = async ({ comentario, changaID, usuarioID, de
   return nuevaReseña[0]
 }
 
+export const updateReseniaService = async (id, fields) => {
+  const { data, error } = await supabase
+    .from('Reseña')
+    .update(fields)
+    .eq('reseñaID', id)
+    .select()
+
+  if (error) throw new Error(error.message)
+  return data[0]
+}
+
+const ROL_ALIAS = {
+  trabajador: [
+    'trabajadorID',
+    'trabajadorId',
+    'trabajador'
+  ],
+  contratante: [
+    'contratanteID',
+    'contratanteId',
+    'contratante'
+  ]
+}
+
+const normalizeIdField = (rawBody, aliases, fallback) => {
+  for (const key of aliases) {
+    if (rawBody?.[key] !== undefined && rawBody?.[key] !== null) {
+      return rawBody[key]
+    }
+  }
+  return fallback ?? null
+}
+
+const normalizeChangaId = (rawBody) => {
+  const aliases = ['changaID', 'changaId', 'changa', 'idChanga']
+  for (const key of aliases) {
+    if (rawBody?.[key] !== undefined && rawBody?.[key] !== null) {
+      return rawBody[key]
+    }
+  }
+  return null
+}
+
+const sanitizeComentario = (value) => {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length ? trimmed : null
+}
+
+const normalizeRatings = (payload = {}) => {
+  const rawRatings = payload.ratings ?? payload.calificaciones ?? null
+
+  if (Array.isArray(rawRatings)) {
+    return rawRatings
+      .map((rating) => {
+        const nombre = (rating?.nombre ?? rating?.label ?? rating?.name ?? '').trim()
+        const calificacion = Number(rating?.calificacion ?? rating?.rating)
+        if (!Number.isFinite(calificacion)) {
+          return { nombre: '', calificacion: 0 }
+        }
+        const boundedScore = Math.min(5, Math.max(1, calificacion))
+        return { nombre, calificacion: boundedScore }
+      })
+      .filter((rating) => rating.nombre && Number.isFinite(rating.calificacion))
+  }
+
+  if (rawRatings && typeof rawRatings === 'object') {
+    return Object.entries(rawRatings)
+      .map(([key, value]) => {
+        const calificacion = Number(value)
+        if (!Number.isFinite(calificacion)) {
+          return { nombre: '', calificacion: 0 }
+        }
+        return {
+          nombre: key,
+          calificacion: Math.min(5, Math.max(1, calificacion))
+        }
+      })
+      .filter((rating) => rating.nombre && Number.isFinite(rating.calificacion))
+  }
+
+  return []
+}
+
+const fetchHabilidadIds = async (nombres = []) => {
+  if (!nombres.length) return new Map()
+
+  const { data, error } = await supabase
+    .from('Habilidad')
+    .select('habilidadID, nombre')
+    .in('nombre', [...new Set(nombres)])
+
+  if (error) throw new Error(error.message)
+
+  return new Map(data.map((habilidad) => [habilidad.nombre, habilidad.habilidadID]))
+}
+
+export const submitReseniaCompletaService = async (payload = {}, user = {}) => {
+  const usuarioID = payload.usuarioID
+    ?? payload.usuarioId
+    ?? user?.id
+    ?? normalizeIdField(payload, ROL_ALIAS.trabajador)
+    ?? normalizeIdField(payload, ROL_ALIAS.contratante)
+
+  const changaID = normalizeChangaId(payload)
+  const destinatarioID = payload.destinatarioID
+    ?? payload.destinatarioId
+    ?? normalizeIdField(payload, ROL_ALIAS.trabajador)
+    ?? normalizeIdField(payload, ROL_ALIAS.contratante)
+
+  const comentario = sanitizeComentario(payload.comentario ?? payload.comment ?? payload.descripcion)
+
+  if (!usuarioID) {
+    throw new Error('No se pudo identificar al autor de la reseña.')
+  }
+
+  if (!destinatarioID) {
+    throw new Error('No se especificó a quién va dirigida la reseña.')
+  }
+
+  if (!changaID) {
+    throw new Error('Falta el ID de la changa asociada a la reseña.')
+  }
+
+  const normalizedRatings = normalizeRatings(payload)
+
+  const { data: existing, error: existingError } = await supabase
+    .from('Reseña')
+    .select('*')
+    .eq('changaID', changaID)
+    .eq('usuarioID', usuarioID)
+    .eq('destinatarioID', destinatarioID)
+    .maybeSingle()
+
+  if (existingError) throw new Error(existingError.message)
+
+  let reseñaRecord = existing
+
+  if (!reseñaRecord) {
+    reseñaRecord = await createReseniaService({ comentario, changaID, usuarioID, destinatarioID })
+    if (normalizedRatings.length) {
+      reseñaRecord = await updateReseniaService(reseñaRecord.reseñaID, { estado: 'completada' })
+    }
+  } else {
+    const updateFields = {}
+    if (comentario !== null) {
+      updateFields.comentario = comentario
+    }
+    if (normalizedRatings.length) {
+      updateFields.estado = 'completada'
+    }
+
+    if (Object.keys(updateFields).length) {
+      reseñaRecord = await updateReseniaService(reseñaRecord.reseñaID, updateFields)
+    }
+  }
+
+  if (!reseñaRecord) {
+    throw new Error('No se pudo crear o actualizar la reseña.')
+  }
+
+  if (!normalizedRatings.length) {
+    return { reseña: reseñaRecord, calificaciones: [] }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('ReseñaHabilidad')
+    .delete()
+    .eq('reseñaID', reseñaRecord.reseñaID)
+
+  if (deleteError) throw new Error(deleteError.message)
+
+  const habilidadMap = await fetchHabilidadIds(normalizedRatings.map((rating) => rating.nombre))
+
+  const inserts = normalizedRatings
+    .map((rating) => {
+      const habilidadID = rating.habilidadID ?? habilidadMap.get(rating.nombre)
+      if (!habilidadID) {
+        return null
+      }
+      return {
+        reseñaID: reseñaRecord.reseñaID,
+        habilidadID,
+        calificacion: rating.calificacion
+      }
+    })
+    .filter(Boolean)
+
+  if (inserts.length) {
+    const { error: insertError } = await supabase
+      .from('ReseñaHabilidad')
+      .insert(inserts)
+
+    if (insertError) throw new Error(insertError.message)
+
+    await calcularPuntajeResenia(reseñaRecord.reseñaID).catch(() => {})
+  }
+
+  return {
+    reseña: reseñaRecord,
+    calificacionesGuardadas: inserts.length
+  }
+}
+
+
 /* ---------------------------------------------------------
  *   3) CRUD RESTANTE
  * --------------------------------------------------------- */
@@ -176,18 +381,7 @@ export const getReseniaByIdService = async (id) => {
   if (error) throw new Error(error.message)
   return data
 }
-
-export const updateReseniaService = async (id, fields) => {
-  const { data, error } = await supabase
-    .from('Reseña')
-    .update(fields)
-    .eq('reseñaID', id)
-    .select()
-
-  if (error) throw new Error(error.message)
-  return data[0]
-}
-
+  
 export const deleteReseniaService = async (id) => {
   const { error } = await supabase
     .from('Reseña')
