@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Stack, useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 
 import {
     ScrollView,
@@ -308,7 +309,7 @@ const JobDetailsScreen = () => {
     const { goToProfile } = useProfileNavigation();
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
     const router = useRouter();
-
+    const navigation = useNavigation();
     // Rol real del usuario autenticado (trabajador / contratante)
     const [userRole, setUserRole] = useState<"trabajador" | "contratante" | null>(null);
 
@@ -495,6 +496,31 @@ const JobDetailsScreen = () => {
         }
     }, [API_URL, checkExistingApplication, currentUserId, hasApplied, isContractor, jobDetails?.changa?.changaID]);
 
+    const applicants = useMemo<PersonSummary[]>(() => {
+        if (!jobDetails?.postulaciones) return [];
+        return jobDetails.postulaciones
+            .map((post) => toPersonSummary(post.usuario))
+             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
+    }, [jobDetails?.postulaciones]);
+    const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
+
+    const assignedWorkers = useMemo(() => {
+        if (!isContractor) return [];
+
+        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
+        if (assignedIDs.length === 0) return [];
+
+        return applicants.filter((a) => assignedIDs.includes(a.id));
+    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
+
+    const isCurrentUserAssigned = useMemo(() => {
+        if (isContractor || !currentUserId || !jobDetails?.changa?.trabajadores) {
+            return false;
+        }
+        // Comparamos como strings para evitar problemas de tipo
+        return (jobDetails.changa.trabajadores || []).map(String).includes(String(currentUserId));
+    }, [isContractor, currentUserId, jobDetails?.changa?.trabajadores]);
+
     const handleCloseApplications = useCallback(async () => {
         if (!isContractor) return;
         if (!jobDetails?.changa?.changaID) return;
@@ -546,54 +572,132 @@ const JobDetailsScreen = () => {
         );
     }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
 
-    const handleFinalizeChanga = useCallback(async () => {
-        if (!isContractor) return;
-        if (!jobDetails?.changa?.changaID) return;
+    
+const handleFinalizeChanga = useCallback(async () => {
+    // Guards de ambas versiones
+    if (!isContractor) return;
+    if (!jobDetails?.changa?.changaID) return;
+    
+    // Obtenemos al trabajador (de la lógica 2)
+    const workerToReview = assignedWorkers?.[0];
 
-        Alert.alert(
-            "Finalizar changa",
-            "¿Confirmás que querés finalizar esta changa? Esto permitirá que los actores dejen sus reseñas.",
-            [
-                { text: "Cancelar", style: "cancel" },
-                {
-                    text: "Finalizar",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            const token = await AsyncStorage.getItem("jwtToken");
-                            if (!token) {
-                                Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
-                                return;
-                            }
+    // Alert con texto combinado
+    Alert.alert(
+        "Finalizar y Reseñar", // Título actualizado
+        "¿Confirmás que querés finalizar esta changa? Esto la marcará como 'finalizada' y te llevará a la pantalla para reseñar al trabajador.", // Mensaje actualizado
+        [
+            { text: "Cancelar", style: "cancel" },
+            {
+                text: "Confirmar", // Texto del botón actualizado
+                style: "destructive",
+                onPress: async () => {
+                    // --- INICIO LÓGICA COMBINADA ---
 
-                            const response = await axios.post(
-                                `${API_URL}/api/changas/finalizar/${jobDetails.changa.changaID}`,
-                                {},
-                                {
-                                    headers: {
-                                        Authorization: `Bearer ${token}`,
-                                    },
-                                }
-                            );
+                    // 1. Obtenemos datos y validamos (Lógica 2)
+                    const changaId = jobDetails.changa.changaID;
+                    const trabajadorId = workerToReview?.id;
+                    const workerName = workerToReview?.name;
 
-                            Alert.alert(
-                                "Changa finalizada",
-                                "La changa pasó a estado 'finalizada'. Se generaron las reseñas necesarias."
-                            );
+                    if (!trabajadorId || !changaId) {
+                        Alert.alert(
+                            "Error de datos",
+                            "No se pudo identificar al trabajador a reseñar (ID: " + trabajadorId + ") o la changa (ID: " + changaId + ")."
+                        );
+                        return;
+                    }
 
-                            await fetchJobDetails(); // refrescar la pantalla
-
-                        } catch (err: any) {
-                            console.error("Error finalizando changa:", err?.response?.data || err);
-                            const backendMessage =
-                                err?.response?.data?.error || "Ocurrió un error inesperado.";
-                            Alert.alert("Error", backendMessage);
+                    // 2. Ejecutamos la finalización de la changa (Lógica 1)
+                    try {
+                        const token = await AsyncStorage.getItem("jwtToken");
+                        if (!token) {
+                            Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+                            return;
                         }
-                    },
+
+                        // (LÓGICA 1) Llamada a la API para finalizar
+                        await axios.post(
+                            `${API_URL}/api/changas/finalizar/${changaId}`,
+                            {},
+                            {
+                                headers: {
+                                    Authorization: `Bearer ${token}`,
+                                },
+                            }
+                        );
+
+                        // Si la API tuvo éxito, no mostramos el alert de "Changa finalizada",
+                        // en su lugar, navegamos.
+
+                        // (LÓGICA 2) Navegación a la reseña
+                        console.log(`Changa finalizada. Navegando a Reseña con changaId: ${changaId}, trabajadorId: ${trabajadorId}`);
+                        
+                        router.push({
+                            pathname: '/resenia/reseniatrabajador', 
+                            params: { 
+                                changaId: changaId,
+                                trabajadorId: trabajadorId,
+                                workerName: workerName 
+                            }
+                        });
+
+                        // (LÓGICA 1) Refrescamos los datos 
+                        await fetchJobDetails(); 
+
+                    } catch (err: any) {
+                        // (LÓGICA 1) Manejo de errores
+                        console.error("Error finalizando changa:", err?.response?.data || err);
+                        const backendMessage =
+                            err?.response?.data?.error || "Ocurrió un error inesperado al finalizar la changa.";
+                        Alert.alert("Error", backendMessage);
+                    }
+                    // --- FIN LÓGICA COMBINADA ---
                 },
-            ]
+            },
+        ]
+    );
+}, [
+    // Dependencias combinadas
+    isContractor, 
+    jobDetails?.changa?.changaID, 
+    assignedWorkers,
+    router,
+    API_URL,
+    fetchJobDetails
+]);
+
+const handleReviewContratante = useCallback(() => {
+    // Doble chequeo de seguridad
+    if (isContractor || !jobDetails?.changa?.changaID) return;
+
+    const changaId = jobDetails.changa.changaID;
+    const contratanteId = contractorSummary?.id;
+    const contratanteName = contractorSummary?.name;
+
+    if (!changaId || !contratanteId) {
+        Alert.alert(
+            "Error de datos",
+            "No se pudo identificar al contratante a reseñar (ID: " + contratanteId + ") o la changa (ID: " + changaId + ")."
         );
-    }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
+        return;
+    }
+
+    console.log(`Navegando a Reseña Contratante con changaId: ${changaId}, contratanteId: ${contratanteId}`);
+
+    // Navegamos a la nueva pantalla de reseña
+    router.push({
+        pathname: '/resenia/reseniacontratante', // <-- NUEVA RUTA
+        params: { 
+            changaId: changaId,
+            contratanteId: contratanteId,
+            contratanteName: contratanteName 
+        }
+    });
+}, [
+    isContractor, 
+    jobDetails?.changa?.changaID, 
+    contractorSummary, // <-- Dependemos del resumen del contratante
+    router
+]);
 
 useFocusEffect(
   useCallback(() => {
@@ -682,23 +786,11 @@ useFocusEffect(
         };
     }, [jobDetails?.changa?.direccion, coordinates?.latitude, coordinates?.longitude]);
 
-    const applicants = useMemo<PersonSummary[]>(() => {
-        if (!jobDetails?.postulaciones) return [];
-        return jobDetails.postulaciones
-            .map((post) => toPersonSummary(post.usuario))
-             .filter((candidate): candidate is PersonSummary => Boolean(candidate));
-    }, [jobDetails?.postulaciones]);
 
-    const assignedWorkers = useMemo(() => {
-        if (!isContractor) return [];
 
-        const assignedIDs = (jobDetails?.changa?.trabajadores || []).map((workerId) => String(workerId));
-        if (assignedIDs.length === 0) return [];
 
-        return applicants.filter((a) => assignedIDs.includes(a.id));
-    }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
 
-    const contractorSummary = useMemo(() => toPersonSummary(jobDetails?.contratante), [jobDetails?.contratante]);
+
 
     const profile = isContractor ? assignedWorkers : contractorSummary;
     const profileLabel =
@@ -746,7 +838,7 @@ useFocusEffect(
     const isIniciado = changaState === "iniciada";
     const isEnProceso = changaState === "enproceso" || changaState === "en_proceso";
     const isFinalizada = changaState === "finalizada";
-
+    const showApplyTip = !isContractor && isIniciado;
     const habilities = extractHabilities(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
@@ -961,6 +1053,7 @@ useFocusEffect(
                     </View>
                 </View>
             </ScrollView>
+            
                 <View style={styles.footer}>
                 {isContractor ? (
                     changa.estado?.toLowerCase() === "iniciada" ? (
@@ -1000,6 +1093,26 @@ useFocusEffect(
 
                     ) : null // Podés agregar más estados (finalizada etc.)
                 ) : (
+                    // CASO 1: Changa FINALIZADA y FUI ASIGNADO -> Botón de Reseña
+                    (isFinalizada && isCurrentUserAssigned) ? (
+                        <TouchableOpacity
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={handleReviewContratante} 
+                        >
+                            <Ionicons name="star-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Dejar reseña al contratante</Text>
+                        </TouchableOpacity>
+                    // CASO 2: Changa EN PROCESO y FUI ASIGNADO -> Botón deshabilitado
+                    ) : (isEnProceso && isCurrentUserAssigned) ? (
+                        <TouchableOpacity
+                            style={[styles.actionButtonPrimary, styles.actionButtonPrimaryDisabled, { flex: 1 }]}
+                            disabled={true}
+                        >
+                            <Ionicons name="hourglass-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Changa en proceso</Text>
+                        </TouchableOpacity>
+                    // CASO 3: Changa INICIADA (abierta a postulación) -> Lógica de Postulación
+                    ) : (isIniciado) ? (
                      <TouchableOpacity
                         style={[
                             styles.actionButtonPrimary,
@@ -1008,6 +1121,7 @@ useFocusEffect(
                         disabled={hasApplied || isApplying || isCheckingApplication}
                         onPress={handleApply}
                     >
+                        {/* (El contenido original del botón Postularme va aquí) */}
                         {isApplying ? (
                             <ActivityIndicator size="small" color={palette.white} />
                         ) : (
@@ -1021,11 +1135,23 @@ useFocusEffect(
                             {hasApplied ? 'Ya postulado' : 'Postularme'}
                         </Text>
                     </TouchableOpacity>
+                    // CASO 4: Otros estados (ej. finalizada pero no participé)
+                    ) : (
+                         <TouchableOpacity
+                            style={[styles.actionButtonPrimary, styles.actionButtonPrimaryDisabled, { flex: 1 }]}
+                            disabled={true}
+                        >
+                            <Ionicons name="lock-closed-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>
+                                {isFinalizada ? 'Changa finalizada' : 'No disponible'}
+                            </Text>
+                        </TouchableOpacity>
+                    )
                 )}
             </View>
 
 
-            {!isContractor && (
+            {showApplyTip && (
                 <Text style={styles.tipText}>
                     💡 Tip: Las respuestas rápidas aumentan tus posibilidades.
                 </Text>
@@ -1106,6 +1232,7 @@ const styles = StyleSheet.create({
     },
     actionButtonPrimaryDisabled: {
         opacity: 0.7,
+        backgroundColor: palette.muted,
     },
 
     applicantCard: {
@@ -1220,6 +1347,7 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.md,
         borderRadius: RADIUS.lg,
         gap: SPACING.sm,
+        flex: 1,
     },
 
     actionButtonTextPrimary: { color: palette.white, fontSize: FONT.md, fontWeight: 'bold' },

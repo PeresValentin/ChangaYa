@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -9,30 +9,24 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import theme from '../../constants/theme'; // Ajusta la ruta a tu theme
+import theme from '../../constants/theme';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Constantes del tema
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
-// =========================================================
-// DATOS DE EJEMPLO (Simuladoss - Info del Contratante)
-// ========================================================
-const DUMMY_EMPLOYER_DATA = {
-  employerName: "Ana Gómez",
-  jobTitle: "Plomero Urgente", // Título de la changa para contexto
-  jobPrice: "$15.000",
-};
-// =========================================================
-// NUEVA LISTA FIJA DE CRITERIOS (Para el Contratante)
+// =======================================================
+// LISTA FIJA DE CRITERIOS (Para el Contratante)
 // =========================================================
 const CONTRATANTE_CRITERIA = [
-  { id: 'claridad', name: 'Claridad en las indicaciones' },
-  { id: 'respeto', name: 'Respeto y trato' },
-  { id: 'pago', name: 'Paga en tiempo y forma' },
+ { id: 'claridad', name: 'Claridad en las Indicaciones' },
+  { id: 'respeto', name: 'Respeto y Tratos' },
+  { id: 'pago', name: 'Paga en Tiempo y Forma' },
   { id: 'responsabilidad', name: 'Responsabilidad' },
   { id: 'puntualidad', name: 'Puntualidad' },
 ];
@@ -41,7 +35,7 @@ type RatingState = {
   [key: string]: number; // Clave dinámica para IDs de criterios
 };
 // =========================================================
-// COMPONENTES AUXILIARES
+// COMPONENTES AUXILIARES (Sin cambios)
 // =========================================================
 interface StarRatingProps {
   rating: number;
@@ -93,17 +87,58 @@ const RatingRow: React.FC<RatingRowProps> = ({ id, name, rating, onRate }) => (
 // =========================================================
 export default function DejarResenaContratanteScreen() {
   const router = useRouter();
-  const { changaId } = useLocalSearchParams<{ changaId?: string }>();
+  const { changaId, contratanteId, contratanteName } = useLocalSearchParams<{ 
+    changaId?: string,
+    contratanteId?: string,
+    contratanteName?: string
+  }>();
   // --- Estados del Formulario ---
   const [allRatings, setAllRatings] = useState<RatingState>(() => {
     const initialRatings: RatingState = {};
-    // Inicializar calificaciones solo para los criterios del contratante
     CONTRATANTE_CRITERIA.forEach(criterion => {
       initialRatings[criterion.id] = 0;
     });
     return initialRatings;
   });
   const [comment, setComment] = useState('');
+  // AÑADIDO: Nuevos estados para la API
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // ID del trabajador
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  // AÑADIDO: Cargar el ID del usuario (trabajador) desde AsyncStorage
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      console.log("--- Depurando Reseña Contratante ---");
+      try {
+        const storedUser = await AsyncStorage.getItem('userData');
+        if (!storedUser) {
+          console.error("Error: 'userData' no encontrado en AsyncStorage.");
+          Alert.alert("Error", "No se pudo identificar tu sesión.");
+          router.back();
+          return;
+        }
+        console.log("userData (raw):", storedUser);
+        const parsedUser = JSON.parse(storedUser);
+        console.log("userData (parsed):", parsedUser);
+        const extractedID = parsedUser?.id || parsedUser?._id || parsedUser?.usuarioID || parsedUser?.userId;
+        if (!extractedID) {
+            console.error("Error: No se pudo extraer el ID del objeto 'parsedUser'.");
+            Alert.alert("Error", "No se pudo extraer tu ID de usuario desde la sesión.");
+            router.back();
+            return;
+        }
+        console.log("ID extraído (trabajador):", extractedID);
+        setCurrentUserId(String(extractedID));
+      } catch (e) {
+        console.error("Error fatal cargando ID de usuario:", e);
+        Alert.alert("Error", "Ocurrió un error al verificar tu sesión.");
+        router.back();
+      }
+    };
+    loadUserData();
+  }, []);
+  
   // --- Lógica de Calificación ---
   const handleRate = (itemId: string, newRating: number) => {
     setAllRatings(prevRatings => ({
@@ -111,28 +146,60 @@ export default function DejarResenaContratanteScreen() {
       [itemId]: newRating,
     }));
   };
-  // --- Lógica de Envío ---
+  // --- Lógica de Envío (REEMPLAZADA) ---
   const handlePublish = async () => {
-    // Validación simple
+    // Validación de campo
     const allRated = Object.values(allRatings).every(rating => rating > 0);
     if (!allRated) {
       Alert.alert("Faltan Calificaciones", "Por favor, califica todos los aspectos antes de publicar.");
       return;
     }
-    console.log("Publicando reseña del CONTRATANTE para Changa ID:", changaId);
-    console.log("Calificaciones:", allRatings);
-    console.log("Comentario:", comment);
-    // Lógica de API (POST a /api/reseñas-contratante) ...
-    // El body incluiría:
-    // {
-    //   changa_id: changaId,
-    //   comentario: comment,
-    //   ...allRatings (calificacion_claridad, calificacion_respeto, etc.)
-    // }
-    Alert.alert("Reseña Publicada", "¡Gracias por tu opinión!");
-    router.back(); // Volver atrás
+    // Validación de IDs
+    if (!changaId || !contratanteId || !currentUserId) {
+        Alert.alert("Error de Datos", "Faltan IDs para enviar la reseña. Intentá volver y reingresar.");
+        return;
+    }
+    // Pedir Token
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) {
+        Alert.alert("Sesión Expirada", "Iniciá sesión nuevamente.");
+        return;
+    }
+     const ratingDetails = Object.entries(allRatings).map(([ratingId, ratingValue]) => ({
+        id: ratingId,
+        nombre: CONTRATANTE_CRITERIA.find(criterion => criterion.id === ratingId)?.name || ratingId,
+        calificacion: ratingValue
+    })).filter(detail => detail.calificacion > 0);
+    const payload = {
+        changaId,
+        contratanteId,
+        trabajadorId: currentUserId,
+        destinatarioId: contratanteId,
+        comentario: comment.trim(),
+        ratings: ratingDetails
+    };
+    
+    setIsLoading(true);
+    try {
+        console.log("Enviando reseña de contratante:", payload);
+        // ¡OJO! Aseguratque este sea tu endpoint correcto en el backend
+         const ENDPOINT = `${API_URL}/api/resenia`;
+        await axios.post(ENDPOINT, payload, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+      Alert.alert("Reseña Publicada", "¡Gracias por tu opinión!");
+      router.back(); // Volver atrás
+    } catch (error: any) {
+        console.error("Error al publicar reseña:", error.response?.data || error.message);
+        const errorMsg = error.response?.data?.error || "No se pudo publicar la reseña. Intentá más tarde.";
+        Alert.alert("Error", errorMsg);
+    } finally {
+        setIsLoading(false);
+    }
   };
   const handleCancel = () => {
+    // No enviar si ya estácargando
+    if (isLoading) return;
     router.back();
   };
   // --- Renderizado ---
@@ -159,18 +226,23 @@ export default function DejarResenaContratanteScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* MODIFICADO: Con datos reales */}
           <View style={styles.employerInfoCard}>
             <View style={styles.employerAvatar}>
-              <Text style={styles.employerInitials}>AG</Text>
+              <Text style={styles.employerInitials}>
+                {contratanteName ? contratanteName.charAt(0).toUpperCase() : '?'}
+              </Text>
             </View>
             <View>
-              <Text style={styles.employerName}>{DUMMY_EMPLOYER_DATA.employerName}</Text>
-              <Text style={styles.employerJobInfo}>{DUMMY_EMPLOYER_DATA.jobTitle} • {DUMMY_EMPLOYER_DATA.jobPrice}</Text>
+              <Text style={styles.employerName}>{contratanteName || 'Contratante'}</Text>
+              <Text style={styles.employerJobInfo}>Changa ID: {changaId}</Text>
             </View>
           </View>
+
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Calificar contratante *</Text>
-            <Text style={styles.sectionSubtitle}>Puntúa tu experiencia con {DUMMY_EMPLOYER_DATA.employerName}</Text>
+            {/* MODIFICADO: Con datos reales */}
+            <Text style={styles.sectionSubtitle}>Puntúa tu experiencia con {contratanteName || 'el contratante'}</Text>
             <View style={styles.ratingsList}>
               {CONTRATANTE_CRITERIA.map((criterion) => (
                 <RatingRow 
@@ -183,6 +255,7 @@ export default function DejarResenaContratanteScreen() {
               ))}
             </View>
           </View>
+
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Comentario</Text>
             <Text style={styles.sectionSubtitle}>Describe tu experiencia (opcional)</Text>
@@ -198,12 +271,22 @@ export default function DejarResenaContratanteScreen() {
             <Text style={styles.charCount}>{comment.length}/500</Text>
           </View>
         </ScrollView>
+
         <View style={styles.footerButtons}>
-          <TouchableOpacity style={styles.draftButton} onPress={handleCancel}>
+          <TouchableOpacity style={styles.draftButton} onPress={handleCancel} disabled={isLoading}>
             <Text style={styles.draftButtonText}>Cancelar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
-            <Text style={styles.publishButtonText}>Publicar</Text>
+          {/* MODIFICADO: Con estado de carga */}
+          <TouchableOpacity 
+            style={[styles.publishButton, isLoading && styles.publishButtonDisabled]} 
+            onPress={handlePublish}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+                <ActivityIndicator size="small" color={palette.white} />
+            ) : (
+                <Text style={styles.publishButtonText}>Publicar</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -211,7 +294,7 @@ export default function DejarResenaContratanteScreen() {
   );
 }
 // =========================================================
-// ESTILOS
+// ESTILOS (Corregidos)
 // =========================================================
 const styles = StyleSheet.create({
   safeArea: {
@@ -310,9 +393,8 @@ const styles = StyleSheet.create({
     minHeight: 60, 
     justifyContent: 'space-between',
   },
-// --- ESTILOS ELIMINADOS: skillRatingRow, skillTypeTag ---
   ratingInfo: {
-    flex: 1, // Permite que el texto ocupe el espacio disponible
+    flex: 1,
     marginRight: SPACING.sm,
     justifyContent: 'center', 
   },
@@ -320,7 +402,7 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     fontWeight: '600' as const,
     color: palette.text,
-    flexWrap: 'wrap', // Asegura que el texto largo se ajuste
+    flexWrap: 'wrap',
   },
   input: {
     backgroundColor: palette.background,
@@ -341,8 +423,8 @@ const styles = StyleSheet.create({
     color: palette.muted,
     textAlign: 'right',
     marginTop: SPACING.xs,
-  },
-  footerButtons: {
+  }, 
+    footerButtons: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -354,7 +436,7 @@ const styles = StyleSheet.create({
     borderTopColor: palette.border,
     gap: SPACING.md,
   },
-  draftButton: {
+    draftButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -386,5 +468,9 @@ const styles = StyleSheet.create({
     color: palette.white,
     fontSize: FONT.md,
     fontWeight: 'bold',
+  },
+  publishButtonDisabled: {
+    backgroundColor: palette.muted,
+    elevation: 0,
   },
 });
