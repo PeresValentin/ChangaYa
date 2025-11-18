@@ -741,16 +741,17 @@ useFocusEffect(
     }
 
     const { changa } = jobDetails;
-    const habilities = extractHabilities(changa);
-    const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
-    const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
-    const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
-    const locationDetail = changa.estado ? `Estado: ${changa.estado}` : 'Disponibilidad sujeta a confirmación';
 
     const changaState = changa?.estado?.toLowerCase?.() ?? "";
     const isIniciado = changaState === "iniciada";
     const isEnProceso = changaState === "enproceso" || changaState === "en_proceso";
     const isFinalizada = changaState === "finalizada";
+
+    const habilities = extractHabilities(changa);
+    const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
+    const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
+    const locationText = formatLocation(changa, reverseGeocodedAddress, coordinates);
+    const locationDetail = changa.estado ? `Estado: ${changa.estado}` : 'Disponibilidad sujeta a confirmación';
 
     const renderApplicantCard = (w: PersonSummary) => (
     <TouchableOpacity
@@ -844,52 +845,44 @@ useFocusEffect(
                 {/** CONTRATANTE viendo la changa **/}
                 {isContractor ? (
                     <>
-                        {/* ESTADO 1: CHANGA INICIADA → Editar + Cerrar postulaciones */}
-                        {isIniciado && (
-                            <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                                <TouchableOpacity
-                                    style={[styles.actionButtonPrimary, { flex: 1 }]}
-                                    onPress={() =>
-                                        router.push({
-                                            pathname: "/changas/editar/[id]",
-                                            params: { id: jobDetails.changa.changaID },
-                                        })
-                                    }
-                                >
-                                    <Ionicons name="create-outline" size={20} color={palette.white} />
-                                    <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                                </TouchableOpacity>
+                        {assignedWorkers.length > 0 && (
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>
+                                    {assignedWorkers.length === 1
+                                        ? "Trabajador asignado"
+                                        : "Trabajadores asignados"}
+                                </Text>
 
-                                <TouchableOpacity
-                                    style={[styles.actionButtonSecondary, { flex: 1 }]}
-                                    onPress={handleCloseApplications}
-                                >
-                                    <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                                    <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
-                                </TouchableOpacity>
+                                {assignedWorkers.map((worker) => (
+                                    <View key={worker.id} style={styles.contractorCard}>
+                                        <View style={styles.contractorAvatar}>
+                                            <Text style={styles.contractorInitials}>{worker.initials}</Text>
+                                        </View>
+
+                                        <View style={styles.contractorInfo}>
+                                            <Text style={styles.contractorName}>{worker.name}</Text>
+
+                                            {typeof worker.rating === "number" && (
+                                                <Text style={styles.ratingText}>⭐ {worker.rating.toFixed(1)}</Text>
+                                            )}
+
+                                            {worker.phone && (
+                                                <Text style={styles.memberSinceText}>Tel: {worker.phone}</Text>
+                                            )}
+                                        </View>
+
+                                        <TouchableOpacity
+                                            style={styles.profileButton}
+                                           onPress={() => goToProfile(worker.id, { changaId: jobDetails?.changa?.changaID })}
+                                        >
+                                            <Text style={styles.profileButtonText}>Ver perfil</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
                             </View>
-                        )}
-
-                        {/* ESTADO 2: CHANGA EN PROCESO → Finalizar */}
-                        {isEnProceso && (
-                            <View style={{ flex: 1 }}>
-                                <TouchableOpacity
-                                    style={[styles.actionButtonPrimary, { flex: 1 }]}
-                                    onPress={handleFinalizeChanga}
-                                >
-                                    <Ionicons name="checkmark-done-outline" size={20} color={palette.white} />
-                                    <Text style={styles.actionButtonTextPrimary}>Finalizar changa</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-
-                        {/* ESTADO 3: CHANGA FINALIZADA → mostrar nada o un texto */}
-                        {isFinalizada && (
-                            <Text style={styles.tipText}>Esta changa ya fue finalizada.</Text>
                         )}
                     </>
                 ) : (
-
                     /** TRABAJADOR viendo al CONTRATANTE **/
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Contratante</Text>
@@ -970,27 +963,42 @@ useFocusEffect(
             </ScrollView>
                 <View style={styles.footer}>
                 {isContractor ? (
-                    <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                        <TouchableOpacity 
-                            style={[styles.actionButtonPrimary, { flex: 1 }]}
-                            onPress={() => 
-                                router.push({ 
-                                    pathname: "/changas/editar/[id]",
-                                    params: { id: jobDetails.changa.changaID }
-                                })
-                            }
-                        >
-                            <Ionicons name="create-outline" size={20} color={palette.white} />
-                            <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                        </TouchableOpacity>
+                    changa.estado?.toLowerCase() === "iniciada" ? (
+                        // 🔵 ESTADO INICIADA → Mostrar Editar + Cerrar postulaciones
+                        <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
+                            <TouchableOpacity 
+                                style={[styles.actionButtonPrimary, { flex: 1 }]}
+                                onPress={() => 
+                                    router.push({ 
+                                        pathname: "/changas/editar/[id]",
+                                        params: { id: jobDetails.changa.changaID }
+                                    })
+                                }
+                            >
+                                <Ionicons name="create-outline" size={20} color={palette.white} />
+                                <Text style={styles.actionButtonTextPrimary}>Editar</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.actionButtonSecondary, { flex: 1 }]}
+                                onPress={handleCloseApplications}
+                            >
+                                <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
+                                <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                    ) : changa.estado?.toLowerCase() === "enproceso" ? (
+                        // 🟢 ESTADO EN PROCESO → Mostrar "Finalizar changa"
                         <TouchableOpacity
-                            style={[styles.actionButtonSecondary, { flex: 1 }]}
-                            onPress={handleCloseApplications}
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={handleFinalizeChanga}
                         >
-                            <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                            <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
+                            <Ionicons name="checkmark-done-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Finalizar changa</Text>
                         </TouchableOpacity>
-                    </View>
+
+                    ) : null // Podés agregar más estados (finalizada etc.)
                 ) : (
                      <TouchableOpacity
                         style={[
