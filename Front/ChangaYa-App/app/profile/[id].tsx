@@ -116,7 +116,30 @@ const PerfilPublicoScreen = () => {
           }
         }
 
-        setProfile(mapUserToPublicProfile(response.data, perfilData, profileId));
+        // === NUEVO === Obtener habilidades generales
+        const generalResp = await axios.get(
+          `${API_URL}/api/perfil/general-habilities/${profileId}`,
+          { headers }
+        );
+
+        // === NUEVO === Obtener habilidades específicas si es trabajador
+        let specificRespData = [];
+        if (response.data.tipoUsuario === "trabajador") {
+          const specificResp = await axios.get(
+            `${API_URL}/api/perfil/top5-specific-habilities/${profileId}`,
+            { headers }
+          );
+          specificRespData = specificResp.data;
+        }
+
+        // Construir perfil final
+        setProfile(
+          mapUserToPublicProfile(response.data, perfilData, profileId, {
+            generalSkills: generalResp.data,
+            specificSkills: specificRespData,
+            reviews: [], // en perfil público no cargamos reseñas detalladas
+          })
+        );
       } catch (error: any) {
         console.error("Error al cargar el perfil público", error?.response?.data || error);
         const backendMessage =
@@ -395,7 +418,7 @@ const PerfilPublicoScreen = () => {
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Puntuación general</Text>
+            <Text style={styles.sectionTitle}>Reputación general</Text>
             <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -407,14 +430,42 @@ const PerfilPublicoScreen = () => {
             />
           </View>
           <Text style={styles.sectionHint}>
-           {profile.completedJobs
+            {profile.completedJobs
               ? `Basado en ${profile.completedJobs} changas completadas.`
               : "Seguimos recopilando reseñas de este usuario."}
           </Text>
         </View>
 
-        {profile.topSkills.length > 0 ? (
-          <SkillsList title="Habilidades" skills={profile.topSkills} />
+        {/* === NUEVO: HABILIDADES GENERALES === */}
+        {profile.generalSkills && profile.generalSkills.length > 0 ? (
+          <SkillsList
+            title="Habilidades generales"
+            skills={profile.generalSkills.map((h, index) => ({
+              id: `g-${index}`,
+              label: h.nombre,
+              level: h.promedio / 5,
+            }))}
+          />
+        ) : null}
+        
+
+        {/* === NUEVO: HABILIDADES ESPECÍFICAS === */}
+        {profile.role === "trabajador" ? (
+          profile.specificSkills && profile.specificSkills.length > 0 ? (
+            <SkillsList
+              title="Top 5 habilidades específicas"
+              skills={profile.specificSkills.map((h, index) => ({
+                id: `s-${index}`,
+                label: h.nombre,
+                level: h.promedio / 5,
+              }))}
+            />
+          ) : (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Habilidades específicas</Text>
+              <Text style={styles.bodyTextMuted}>Aún no tiene habilidades evaluadas.</Text>
+            </View>
+          )
         ) : null}
 
         <View style={styles.sectionCard}>

@@ -336,10 +336,35 @@ const PerfilPrivadoScreen = () => {
         }
       }
 
-       const reviews = await fetchReviewsForUser(API_URL, String(extractedId), headers);
-      const mappedProfile = mapUserToPublicProfile(userResponse.data, perfilData, String(extractedId), {
-        reviews,
-      });
+      // === NUEVO === Obtener habilidades generales (trabajador o contratante)
+      const generalResp = await axios.get(
+        `${API_URL}/api/perfil/general-habilities/${extractedId}`,
+        { headers }
+      );
+
+      // === NUEVO === Obtener específicas solo si es trabajador
+      let specificRespData = [];
+      if (userResponse.data.tipoUsuario === "trabajador") {
+        const specificResp = await axios.get(
+          `${API_URL}/api/perfil/top5-specific-habilities/${extractedId}`,
+          { headers }
+        );
+        specificRespData = specificResp.data; // [{ nombre, promedio }]
+      }
+
+
+      const reviews = await fetchReviewsForUser(API_URL, String(extractedId), headers);
+      
+      const mappedProfile = mapUserToPublicProfile(
+        userResponse.data,
+        perfilData,
+        String(extractedId),
+        {
+          reviews,
+          generalSkills: generalResp.data,
+          specificSkills: specificRespData
+        }
+      );
       setProfile(mappedProfile);
     } catch (error: any) {
       console.error("Error al cargar el perfil privado", error?.response?.data || error);
@@ -522,12 +547,12 @@ const PerfilPrivadoScreen = () => {
             })}
           </View>
         </View>
-
         <View style={styles.sectionCard}>
-           <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Tu reputación general</Text>
             <Text style={styles.sectionValue}>{generalScorePercent}%</Text>
           </View>
+
           <View style={styles.progressTrack}>
             <View
               style={[
@@ -536,17 +561,43 @@ const PerfilPrivadoScreen = () => {
               ]}
             />
           </View>
+
           <Text style={styles.sectionHint}>{generalScoreHint}</Text>
         </View>
-
-           {hasSkills ? (
-          <SkillsList title="Top 5 habilidades" skills={profile.topSkills} />
+        {/* === NUEVO: HABILIDADES GENERALES === */}
+        {profile.generalSkills && profile.generalSkills.length > 0 ? (
+          <SkillsList
+            title="Habilidades generales"
+            skills={profile.generalSkills.map((h, index) => ({
+              id: `g-${index}`,
+              label: h.nombre,
+              level: h.promedio / 5, // normalizar
+            }))}
+          />
         ) : (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Top 5 habilidades</Text>
-            <Text style={styles.bodyTextMuted}>Todavía no cargaste habilidades destacadas.</Text>
+            <Text style={styles.sectionTitle}>Habilidades generales</Text>
+            <Text style={styles.bodyTextMuted}>Aún no tenés habilidades generales evaluadas.</Text>
           </View>
         )}
+           {profile.role === "trabajador" ? (
+            profile.specificSkills && profile.specificSkills.length > 0 ? (
+              <SkillsList
+                title="Top 5 habilidades específicas"
+                skills={profile.specificSkills.map((h, index) => ({
+                  id: `specific-${index}`,
+                  label: `${h.nombre}`,
+                  level: h.promedio / 5, // normalizado 1–5 → 0–1
+                }))}
+              />
+            ) : (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>Habilidades específicas</Text>
+                <Text style={styles.bodyTextMuted}>Aún no tenés habilidades evaluadas.</Text>
+              </View>
+            )
+          ) : null}
+
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Sobre mí</Text>

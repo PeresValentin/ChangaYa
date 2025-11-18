@@ -60,6 +60,11 @@ export type PublicProfile = {
   email?: string | null;
   phone?: string | null;
   about: string;
+
+  // === AGREGAR ESTO ===
+  generalSkills?: { nombre: string; promedio: number }[];
+  specificSkills?: { nombre: string; promedio: number }[];
+
   topSkills: SkillItem[];
   reviews: ReviewItemProps[];
   avatarUrl?: string | null;
@@ -178,7 +183,9 @@ export const mapUserToPublicProfile = (
   user: ApiUser,
   perfil: ApiPerfil | null,
   fallbackId: string,
-  extras?: Partial<Pick<PublicProfile, "reviews" | "topSkills">>,
+  extras?: Partial<
+    Pick<PublicProfile, "reviews" | "topSkills" | "generalSkills" | "specificSkills">
+  >,
 ): PublicProfile => {
 
   //  1. Score crudo que viene de la base (0 a 5)
@@ -223,6 +230,10 @@ export const mapUserToPublicProfile = (
     joinedAt: buildJoinedDate(user),
 
     about: aboutText,
+
+    generalSkills: extras?.generalSkills ?? [],
+    specificSkills: extras?.specificSkills ?? [],
+
     topSkills,
     reviews,
   };
