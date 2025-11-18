@@ -1,4 +1,7 @@
 import { supabase } from '../config/supabaseClient.js'
+import {
+  finalizarChangaService,
+} from "../services/changaService.js";
 
 const WORKER_ID_ALIASES = [
   'trabajadorID',
@@ -532,6 +535,24 @@ export const cerrarPostulaciones = async (req, res) => {
 
   } catch (err) {
     console.error("❌ Error en cerrarPostulaciones:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const finalizarChanga = async (req, res) => {
+  try {
+    const changaID = req.params.id;
+    const user = req.user; // viene del JWT
+
+    if (!changaID) {
+      return res.status(400).json({ error: "Debe enviar el ID de la changa." });
+    }
+
+    const result = await finalizarChangaService(changaID, user.id);
+    return res.json(result);
+
+  } catch (err) {
+    console.error("Error al finalizar changa:", err);
     return res.status(500).json({ error: err.message });
   }
 };

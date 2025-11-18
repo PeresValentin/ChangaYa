@@ -10,7 +10,8 @@ import {
   getChangasFinalizadasByUser,
   getChangasEnProceso,
   getChangasAbiertas,
-  cerrarPostulaciones
+  cerrarPostulaciones,
+  finalizarChanga 
 } from '../controllers/changaController.js'
 
 import { verificarToken } from '../middleware/authMiddleware.js'
@@ -37,6 +38,6 @@ router.get('/abiertas', verificarToken, getChangasAbiertas);
 
 router.post('/cerrar/:id', verificarToken, cerrarPostulaciones);
 
-
+router.post('/finalizar/:id', verificarToken, finalizarChanga);
 
 export default router

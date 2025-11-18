@@ -546,6 +546,54 @@ const JobDetailsScreen = () => {
         );
     }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
 
+    const handleFinalizeChanga = useCallback(async () => {
+        if (!isContractor) return;
+        if (!jobDetails?.changa?.changaID) return;
+
+        Alert.alert(
+            "Finalizar changa",
+            "¿Confirmás que querés finalizar esta changa? Esto permitirá que los actores dejen sus reseñas.",
+            [
+                { text: "Cancelar", style: "cancel" },
+                {
+                    text: "Finalizar",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const token = await AsyncStorage.getItem("jwtToken");
+                            if (!token) {
+                                Alert.alert("Sesión expirada", "Volvé a iniciar sesión.");
+                                return;
+                            }
+
+                            const response = await axios.post(
+                                `${API_URL}/api/changas/finalizar/${jobDetails.changa.changaID}`,
+                                {},
+                                {
+                                    headers: {
+                                        Authorization: `Bearer ${token}`,
+                                    },
+                                }
+                            );
+
+                            Alert.alert(
+                                "Changa finalizada",
+                                "La changa pasó a estado 'finalizada'. Se generaron las reseñas necesarias."
+                            );
+
+                            await fetchJobDetails(); // refrescar la pantalla
+
+                        } catch (err: any) {
+                            console.error("Error finalizando changa:", err?.response?.data || err);
+                            const backendMessage =
+                                err?.response?.data?.error || "Ocurrió un error inesperado.";
+                            Alert.alert("Error", backendMessage);
+                        }
+                    },
+                },
+            ]
+        );
+    }, [API_URL, isContractor, jobDetails?.changa?.changaID, fetchJobDetails]);
 
 useFocusEffect(
   useCallback(() => {
@@ -693,6 +741,12 @@ useFocusEffect(
     }
 
     const { changa } = jobDetails;
+
+    const changaState = changa?.estado?.toLowerCase?.() ?? "";
+    const isIniciado = changaState === "iniciada";
+    const isEnProceso = changaState === "enproceso" || changaState === "en_proceso";
+    const isFinalizada = changaState === "finalizada";
+
     const habilities = extractHabilities(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
@@ -909,27 +963,42 @@ useFocusEffect(
             </ScrollView>
                 <View style={styles.footer}>
                 {isContractor ? (
-                    <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
-                        <TouchableOpacity 
-                            style={[styles.actionButtonPrimary, { flex: 1 }]}
-                            onPress={() => 
-                                router.push({ 
-                                    pathname: "/changas/editar/[id]",
-                                    params: { id: jobDetails.changa.changaID }
-                                })
-                            }
-                        >
-                            <Ionicons name="create-outline" size={20} color={palette.white} />
-                            <Text style={styles.actionButtonTextPrimary}>Editar</Text>
-                        </TouchableOpacity>
+                    changa.estado?.toLowerCase() === "iniciada" ? (
+                        // 🔵 ESTADO INICIADA → Mostrar Editar + Cerrar postulaciones
+                        <View style={{ flexDirection: "row", gap: SPACING.md, flex: 1 }}>
+                            <TouchableOpacity 
+                                style={[styles.actionButtonPrimary, { flex: 1 }]}
+                                onPress={() => 
+                                    router.push({ 
+                                        pathname: "/changas/editar/[id]",
+                                        params: { id: jobDetails.changa.changaID }
+                                    })
+                                }
+                            >
+                                <Ionicons name="create-outline" size={20} color={palette.white} />
+                                <Text style={styles.actionButtonTextPrimary}>Editar</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.actionButtonSecondary, { flex: 1 }]}
+                                onPress={handleCloseApplications}
+                            >
+                                <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
+                                <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                    ) : changa.estado?.toLowerCase() === "enproceso" ? (
+                        // 🟢 ESTADO EN PROCESO → Mostrar "Finalizar changa"
                         <TouchableOpacity
-                            style={[styles.actionButtonSecondary, { flex: 1 }]}
-                            onPress={handleCloseApplications}
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={handleFinalizeChanga}
                         >
-                            <Ionicons name="close-circle-outline" size={20} color={palette.tint} />
-                            <Text style={styles.actionButtonTextSecondary}>Cerrar postulaciones</Text>
+                            <Ionicons name="checkmark-done-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Finalizar changa</Text>
                         </TouchableOpacity>
-                    </View>
+
+                    ) : null // Podés agregar más estados (finalizada etc.)
                 ) : (
                      <TouchableOpacity
                         style={[
