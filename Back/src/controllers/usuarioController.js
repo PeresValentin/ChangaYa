@@ -91,6 +91,8 @@ export const createUsuario = async (req, res) => {
       parallelism: 1
     })
 
+    const API_BASE_URL = process.env.API_BASE_URL
+
     // Generar token de verificación por 30 minutos
     const verificationToken = jwt.sign(
       { nombreUsuario, passwordHash, nombre, apellido, dni, email, telefono, tipoUsuario },
@@ -99,7 +101,7 @@ export const createUsuario = async (req, res) => {
     )
 
     // Link de verificación (podés reemplazar localhost por tu dominio)
-    const verificationLink = `http://localhost:3000/api/usuarios/verificar?token=${verificationToken}`
+    const verificationLink = `${API_BASE_URL}/api/usuarios/verificar?token=${verificationToken}`
 
     const displayName = nombre || nombreUsuario || 'Changayer'
 
