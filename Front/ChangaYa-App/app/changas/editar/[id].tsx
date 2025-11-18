@@ -25,9 +25,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
-// Opciones de ejemplo para la categoría (en el futuro vendrán de BD o config)
-const CATEGORIAS = ['Plomería', 'Limpieza', 'Delivery', 'Hogar', 'Mascotas', 'Otros'];
-
 // =========================================================
 // COMPONENTE PRINCIPAL DEL FORMULARIO
 // =========================================================
@@ -38,7 +35,6 @@ const EditarChangaScreen = () => {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id?: string }>();
     const { showLoading, hideLoading } = useLoading();
-    const [categoria, setCategoria] = useState<string>('');
     const [titulo, setTitulo] = useState<string>('');
     const [descripcion, setDescripcion] = useState<string>('');
     const [precio, setPrecio] = useState<string>('');
@@ -72,9 +68,9 @@ useEffect(() => {
                 throw new Error("La API no devolvió el objeto 'changa' esperado.");
             }
             // POBLAMOS LOS ESTADOS
-            // 'categoria' sigue sin venir en la respuesta de la API.
-            // Este campo quedará vacío a menos que el campo se llame distinto.
-            setCategoria(data.categoria || ''); 
+            
+            
+            
             setTitulo(data.titulo || ''); // 'titulo' existe
             setDescripcion(data.descripcion || ''); // 'descripcion' existe
             setPrecio(String(data.remuneracion || '')); // 'remuneracion' existe
@@ -213,14 +209,6 @@ useEffect(() => {
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled" // Para que el teclado no cierre selects/pickers
             >
-                <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Categoría *</Text>
-                    <TouchableOpacity style={styles.pickerButton}>
-                        <Ionicons name="build-outline" size={20} color={palette.tint} style={styles.iconLeft} />
-                        <Text style={styles.pickerButtonText}>{categoria}</Text>
-                        <Ionicons name="chevron-down" size={20} color={palette.muted} />
-                    </TouchableOpacity>
-                </View>
                 <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Título *</Text>
                     <TextInput

@@ -1,7 +1,7 @@
 // app/changas/nueva.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,9 +24,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
 
-// Opciones de ejemplo para la categoría (en el futuro vendrán de BD o config)
-const CATEGORIAS = ['Plomería', 'Limpieza', 'Delivery', 'Hogar', 'Mascotas', 'Otros'];
-
 // =========================================================
 // COMPONENTE PRINCIPAL DEL FORMULARIO
 // =========================================================
@@ -35,8 +32,6 @@ const CrearChangaScreen = () => {
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
     const router = useRouter();
-    const { categoria: categoriaParam } = useLocalSearchParams<{ categoria?: string }>(); 
-    const [categoria, setCategoria] = useState<string>(categoriaParam || '');
     const [titulo, setTitulo] = useState<string>('');
     const [descripcion, setDescripcion] = useState<string>('');
     const [precio, setPrecio] = useState<string>('');
@@ -154,16 +149,7 @@ const CrearChangaScreen = () => {
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled" // Para que el teclado no cierre selects/pickers
             >
-                {/* --- Categoría --- */}
-                <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Categoría *</Text>
-                    {/* // TODO: Reemplazar con un componente Picker/Select real */}
-                    <TouchableOpacity style={styles.pickerButton}>
-                        <Ionicons name="build-outline" size={20} color={palette.tint} style={styles.iconLeft} />
-                        <Text style={styles.pickerButtonText}>{categoria}</Text>
-                        <Ionicons name="chevron-down" size={20} color={palette.muted} />
-                    </TouchableOpacity>
-                </View>
+                
 
                 {/* --- Título --- */}
                 <View style={styles.fieldContainer}>
