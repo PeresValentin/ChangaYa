@@ -180,15 +180,22 @@ export const mapUserToPublicProfile = (
   fallbackId: string,
   extras?: Partial<Pick<PublicProfile, "reviews" | "topSkills">>,
 ): PublicProfile => {
+
+  //  1. Score crudo que viene de la base (0 a 5)
   const rating = typeof user.rankingGeneral === "number" ? user.rankingGeneral : 0;
-  const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : null;
+
+  //  2. Normalizado para tu barra (0 a 1)
+  const normalizedScore = rating > 0 ? Math.min(1, Math.max(0, rating / 5)) : 0;
+
+  //  3. Completadas
   const completedJobs =
     typeof user.changasCompletadas === "number"
       ? user.changasCompletadas
       : typeof user.changasRealizadas === "number"
       ? user.changasRealizadas
       : undefined;
-      const topSkills = extras?.topSkills ?? parseSkills(user.habilidades);
+
+  const topSkills = extras?.topSkills ?? parseSkills(user.habilidades);
   const reviews = extras?.reviews ?? [];
 
   const aboutText =
@@ -204,16 +211,19 @@ export const mapUserToPublicProfile = (
     id: String(profileId),
     name: buildDisplayName(user),
     location: buildLocation(user),
-    rating,
-     role: user.tipoUsuario ?? user.rol ?? null,
+
+    rating,                 // ESTE MUESTRA LAS ESTRELLAS (0–5)
+    generalScore: normalizedScore,  // ESTE MUESTRA LA BARRA (0–1 normalizado)
+
+    role: user.tipoUsuario ?? user.rol ?? null,
     completedJobs,
-    generalScore: normalizedScore,
-      email: buildEmail(user),
+    email: buildEmail(user),
     phone: buildPhone(user),
-      avatarUrl: buildAvatarUrl(user, perfil),
+    avatarUrl: buildAvatarUrl(user, perfil),
     joinedAt: buildJoinedDate(user),
+
     about: aboutText,
-     topSkills,
+    topSkills,
     reviews,
   };
 };
