@@ -45,11 +45,37 @@ const CrearChangaScreen = () => {
     const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
     const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
     const [ubicacion, setUbicacion] = useState<string>('');
-    const [habilidades, setHabilidades] = useState<string[]>([ // Ejemplo inicial
-        'Experiencia en plomería',
-        'Disponibilidad inmediata',
-    ]);
-    const [nuevaHabilidad, setNuevaHabilidad] = useState<string>(''); // Para añadir nuevos
+    
+    const [habilidadesBD, setHabilidadesBD] = useState<any[]>([]);
+    const [habilidadesSeleccionadas, setHabilidadesSeleccionadas] = useState<string[]>([]);
+    const [habilidadesNuevas, setHabilidadesNuevas] = useState<string[]>([]);
+
+    const [nuevaHabilidad, setNuevaHabilidad] = useState<string>('');
+
+
+    // Cargar habilidades específicas desde el backend
+    React.useEffect(() => {
+        const fetchHabilidades = async () => {
+            try {
+                const token = await AsyncStorage.getItem("jwtToken");
+                if (!token) return;
+
+                const resp = await axios.get(`${API_URL}/api/habilidad`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                // Solo habilidades específicas (no generales)
+                const especificas = resp.data.filter(h => h.esGeneral === false);
+
+                setHabilidadesBD(especificas);
+            } catch (err) {
+                console.log("Error cargando habilidades:", err);
+            }
+        };
+
+        fetchHabilidades();
+    }, []);
+
 
     // Función para descartar los cambios y volver
     const handleDiscard = () => {
@@ -137,8 +163,6 @@ const CrearChangaScreen = () => {
         }
     };
 
-
-    // TODO: Implementar lógica para publicar la changa
     const handlePublish = async () => {
     if (!titulo || !descripcion || !precio || !ubicacion.trim()) {
         Alert.alert("Campos requeridos", "Por favor completá los campos obligatorios.");
@@ -165,14 +189,35 @@ const CrearChangaScreen = () => {
         // 2. Changa lista para enviar
          const horaInicioISO = scheduledDate.toISOString();
         const horaFinISO = new Date(scheduledDate.getTime() + 60 * 60 * 1000).toISOString();
+
+        // 0. Crear habilidades nuevas
+        let idsHabilidadesNuevas: string[] = [];
+
+        for (const nombre of habilidadesNuevas) {
+            const respNewHab = await axios.post(
+                `${API_URL}/api/habilidad/especificas`,
+                { nombre },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            idsHabilidadesNuevas.push(respNewHab.data.habilidadID);
+        }
+
+        // 1. Habilidades finales = BD seleccionadas + nuevas creadas
+        const habilidadesFinales = [
+            ...habilidadesSeleccionadas,
+            ...idsHabilidadesNuevas
+        ];
+
         const nuevaChanga = {
-        titulo,
-        descripcion,
-        remuneracion: parseFloat(precio),
-        horaInicio: horaInicioISO,
-        horaFin: horaFinISO,
-        esUrgente,
-        ubicacion: `POINT(${lon} ${lat})`,
+            titulo,
+            descripcion,
+            remuneracion: parseFloat(precio),
+            horaInicio: horaInicioISO,
+            horaFin: horaFinISO,
+            esUrgente,
+            ubicacion: `POINT(${lon} ${lat})`,
+            habilidades: habilidadesFinales
         };
 
         // 3. Crear la changa
@@ -195,21 +240,6 @@ const CrearChangaScreen = () => {
 
         Alert.alert("Error", error.response?.data?.error || "No se pudo crear la changa");
     }
-    };
-
-    
-    // TODO: Lógica para añadir un habilidad (simplificada)
-    const handleAddRequisito = () => {
-        if (nuevaHabilidad.trim()) {
-            setHabilidades([...habilidades, nuevaHabilidad.trim()]);
-            setNuevaHabilidad(''); // Limpiar input (si tuvieras uno visible)
-        }
-         console.log("Añadir habilidad (simulado)"); // Placeholder
-    };
-    
-    // TODO: Lógica para quitar un habilidad (opcional)
-    const handleRemoveRequisito = (indexToRemove: number) => {
-        setHabilidades(habilidades.filter((_, index) => index !== indexToRemove));
     };
 
     // --- Renderizado ---
@@ -367,23 +397,76 @@ const CrearChangaScreen = () => {
 
                 {/* --- Habilidades (opcional) --- */}
                 <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Habilidades (opcional)</Text>
-                    {habilidades.map((req, index) => (
-                        <View key={index} style={styles.requirementItem}>
-                            <Ionicons name="checkmark-circle" size={20} color={palette.tint} />
-                            <Text style={styles.requirementText}>{req}</Text>
-                            {/* Opcional: Botón para quitar */}
-                             <TouchableOpacity onPress={() => handleRemoveRequisito(index)} style={styles.removeButton}>
+                    <Text style={styles.label}>Habilidades requeridas (opcional)</Text>
+
+                    {/* Habilidades provenientes de la BD */}
+                    {habilidadesBD.map((hab) => {
+                        const selected = habilidadesSeleccionadas.includes(hab.habilidadID);
+
+                        return (
+                            <TouchableOpacity
+                                key={hab.habilidadID}
+                                style={styles.requirementItem}
+                                onPress={() => {
+                                    if (selected) {
+                                        setHabilidadesSeleccionadas(
+                                            habilidadesSeleccionadas.filter(id => id !== hab.habilidadID)
+                                        );
+                                    } else {
+                                        setHabilidadesSeleccionadas([...habilidadesSeleccionadas, hab.habilidadID]);
+                                    }
+                                }}
+                            >
+                                <Ionicons
+                                    name={selected ? "checkbox" : "square-outline"}
+                                    size={22}
+                                    color={selected ? palette.tint : palette.muted}
+                                />
+                                <Text style={styles.requirementText}>{hab.nombre}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+
+                    {/* Habilidades nuevas agregadas por el usuario */}
+                    {habilidadesNuevas.map((nombre, idx) => (
+                        <View key={idx} style={styles.requirementItem}>
+                            <Ionicons name="add-circle" size={20} color={palette.tint} />
+                            <Text style={styles.requirementText}>{nombre}</Text>
+
+                            <TouchableOpacity
+                                onPress={() =>
+                                    setHabilidadesNuevas(habilidadesNuevas.filter((_, i) => i !== idx))
+                                }
+                            >
                                 <Ionicons name="close-circle" size={20} color={palette.muted} />
                             </TouchableOpacity>
                         </View>
                     ))}
-                    {/* // TODO: Mostrar un TextInput para añadir nuevo habilidad */}
-                    <TouchableOpacity style={styles.addRequirementButton} onPress={handleAddRequisito}>
-                        <Ionicons name="add-circle-outline" size={20} color={palette.tint} />
-                        <Text style={styles.addRequirementText}>Agregar habilidad</Text>
-                    </TouchableOpacity>
+
+                    {/* Input para agregar habilidad nueva */}
+                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10 }}>
+                        <TextInput
+                            placeholder="Nueva habilidad..."
+                            placeholderTextColor={palette.muted}
+                            style={[styles.input, { flex: 1 }]}
+                            value={nuevaHabilidad}
+                            onChangeText={setNuevaHabilidad}
+                        />
+
+                        <TouchableOpacity
+                            style={{ marginLeft: 10 }}
+                            onPress={() => {
+                                if (nuevaHabilidad.trim().length > 0) {
+                                    setHabilidadesNuevas([...habilidadesNuevas, nuevaHabilidad.trim()]);
+                                    setNuevaHabilidad("");
+                                }
+                            }}
+                        >
+                            <Ionicons name="add-circle-outline" size={28} color={palette.tint} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
+
 
             </ScrollView>
 
