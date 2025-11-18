@@ -67,21 +67,21 @@ const quickActions = [
     title: "Plomería",
     description: "Reparaciones",
     icon: "build-outline" as const,
-    route: "/changas/nueva?categoria=plomeria",
+    route: "/changas/nueva",
   },
   {
     id: "limpieza",
     title: "Limpieza",
     description: "Del hogar",
     icon: "sparkles-outline" as const,
-    route: "/changas/nueva?categoria=limpieza",
+    route: "/changas/nueva",
   },
   {
     id: "envios",
     title: "Delivery",
     description: "Envíos",
     icon: "bicycle-outline" as const,
-    route: "/changas/nueva?categoria=envios",
+    route: "/changas/nueva",
   },
 ];
 

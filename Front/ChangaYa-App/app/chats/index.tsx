@@ -17,7 +17,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../../constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
+import NavBar from '../../components/NavBar';
 
 const { FONT, SPACING, RADIUS } = theme;
 const palette = theme.Colors.light;
@@ -148,10 +148,7 @@ const ChatsScreen = () => {
           )}
         </View>
 
-        {/* NAVIGATION */}
-        <View style={styles.bottomNav}>
-          {/* (Se deja igual tu nav actual) */}
-        </View>
+         <NavBar />
       </View>
     </SafeAreaView>
   );
@@ -168,12 +165,13 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 	},
-	contentWrapper: {
-		flex: 1,
-		// Usamos el padding de trabajador.tsx para consistencia
-		paddingHorizontal: SPACING.lg,
-		paddingTop: SPACING.lg,
-	},
+	 contentWrapper: {
+                flex: 1,
+                // Usamos el padding de trabajador.tsx para consistencia
+                paddingHorizontal: SPACING.lg,
+                paddingTop: SPACING.lg,
+                paddingBottom: SPACING.lg * 6,
+        },
 
 	// --- Estilos de Chats (Ajustados al tema) ---
 	headerTitle: {
@@ -213,47 +211,7 @@ const styles = StyleSheet.create({
 		marginLeft: 80,
 	},
 
-	// --- Estilos de Bottom Nav (Copiados 1:1 de trabajador.tsx) ---
-	bottomNav: {
-		flexDirection: "row",
-		justifyContent: "space-around",
-		alignItems: "center",
-		paddingVertical: SPACING.md,
-		paddingHorizontal: SPACING.lg,
-		backgroundColor: palette.white,
-		borderTopLeftRadius: RADIUS.lg,
-		borderTopRightRadius: RADIUS.lg,
-		shadowColor: "#000",
-		shadowOpacity: 0.08,
-		shadowRadius: 10,
-		shadowOffset: { width: 0, height: -4 },
-		elevation: 6,
-	},
-	navItem: {
-		alignItems: "center",
-		gap: 4,
-		flex: 1,
-		paddingVertical: SPACING.xs,
-	},
-	navItemActive: {
-		position: "relative",
-	},
-	navText: { // <-- CORREGIDO (sin 'i')
-		fontSize: FONT.sm,
-		color: palette.muted,
-	},
-	navTextActive: {
-		color: palette.tint,
-		fontWeight: "600" as const,
-	},
-	activeIndicator: {
-		position: "absolute",
-		bottom: -SPACING.xs,
-		width: 8,
-		height: 8,
-		borderRadius: 4,
-		backgroundColor: palette.tint,
-	},
+	
 });
 
 export default ChatsScreen;
