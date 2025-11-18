@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,24 +10,70 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { useLoading } from '../../hooks/LoadingContext';
+import { useLoading } from "../../hooks/LoadingContext";
 import PrimaryButton from "../../components/buttons/PrimaryButton";
 import theme from "../../constants/theme";
-
 
 export default function LoginScreen() {
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const palette = theme.Colors.light;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const router = useRouter();
   const { showLoading, hideLoading } = useLoading();
 
+  // ANIMACIONES
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const fadeInAnim = useRef(new Animated.Value(0)).current;
+  const slideInAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: 1,
+          duration: 4500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 4500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Formulario entra suave
+    Animated.parallel([
+      Animated.timing(fadeInAnim, {
+        toValue: 1,
+        duration: 700,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideInAnim, {
+        toValue: 0,
+        duration: 700,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const translateY = floatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-5, 5],
+  });
+
+  // LÓGICA ORIGINAL (NO TOCO NADA)
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Campos incompletos", "Por favor completa ambos campos.");
@@ -39,30 +84,20 @@ export default function LoginScreen() {
     try {
       const response = await axios.post(
         `${API_URL}/api/usuarios/login`,
-        {
-          email: email,
-          clave: password,
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        { email: email, clave: password },
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      const { token, user, message } = response.data;
+      const { token, user } = response.data;
 
       if (!token || !user) {
         Alert.alert("Error", "Respuesta inesperada del servidor.");
         return;
       }
 
-      // ✅ Guardar el JWT de forma persistente
       await AsyncStorage.setItem("jwtToken", token);
       await AsyncStorage.setItem("userData", JSON.stringify(user));
 
-      console.log("Token guardado:", token);
-      console.log("Usuario:", user);
-
-      // 🚀 Redirección según tipoUsuario
       switch (user.tipoUsuario) {
         case "trabajador":
           router.push("/home/trabajador");
@@ -75,11 +110,8 @@ export default function LoginScreen() {
           break;
         default:
           Alert.alert("Error", "Tipo de usuario desconocido.");
-          break;
       }
     } catch (error: any) {
-      console.error("Error de login:", error.response?.data || error.message);
-
       if (error.response?.data?.error === "Contraseña incorrecta") {
         Alert.alert("Credenciales inválidas", "La contraseña es incorrecta.");
       } else if (error.response?.status === 404) {
@@ -92,275 +124,282 @@ export default function LoginScreen() {
     }
   };
 
-    
   return (
-        <KeyboardAvoidingView 
-        style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardAvoidingView
+      style={styles.keyboardAvoidingContainer}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-        <ScrollView 
-            style={styles.scrollContainer}
-            // 3. Usamos tu 'container' original como contentContainerStyle
-            contentContainerStyle={styles.container} 
-            keyboardShouldPersistTaps="handled"
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* FONDOS PASTEL */}
+        <View style={styles.pastelTop} />
+        <View style={styles.pastelBottom} />
+
+        {/* HERO */}
+        <Animated.View
+          style={[styles.heroWrapper, { transform: [{ translateY }] }]}
         >
-      {/* Avatar inicial */}
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>C</Text>
-      </View>
+          <View style={styles.heroGlow} />
 
-      {/* Encabezado */}
-      <Text style={styles.title}>¡Bienvenido!</Text>
-      <Text style={styles.subtitle}>Encuentra tu próxima changa</Text>
+          <View style={styles.heroCircle}>
+            <Image
+              source={require("../../assets/images/hero_changa.png")}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          </View>
+        </Animated.View>
 
-      {/* Formulario */}
-      <View style={styles.form}>
-        <TextInput
-          placeholder="Email"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-          placeholderTextColor={palette.muted}
-        />
-        {/* AHORA ES UN CONTENEDOR PARA INPUT + ÍCONO */}
-        <View style={styles.passwordInputContainer}>
-          <TextInput
-            placeholder="Contraseña"
-            secureTextEntry={!isPasswordVisible} 
-            value={password}
-            onChangeText={setPassword}
-            style={styles.passwordInput} 
-            placeholderTextColor={palette.muted}
-            autoCapitalize="none"
-        />
+        {/* ENCABEZADO */}
+        <Text style={styles.title}>¡Bienvenido!</Text>
+        <Text style={styles.subtitle}>
+          Accede a tu proxima changa
+        </Text>
 
-            {/* AÑADIDO: Botón del ojo condicional */}
-            {/* Solo se muestra si escribiste algo en la contraseña */}
+        {/* FORM CARD */}
+        <Animated.View
+          style={[
+            styles.formCard,
+            {
+              opacity: fadeInAnim,
+              transform: [{ translateY: slideInAnim }],
+            },
+          ]}
+        >
+          {/* Input Email */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color={palette.muted} />
+            <TextInput
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              style={styles.input}
+              placeholderTextColor={palette.muted}
+            />
+          </View>
+
+          {/* Input Password */}
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color={palette.muted} />
+
+            <TextInput
+              placeholder="Contraseña"
+              secureTextEntry={!isPasswordVisible}
+              value={password}
+              onChangeText={setPassword}
+              style={styles.input}
+              placeholderTextColor={palette.muted}
+              autoCapitalize="none"
+            />
+
             {password.length > 0 && (
-                <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)} 
-                >
-          <Ionicons 
-            name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} 
-            size={24} 
-            color={palette.muted}
-          />
-                </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
+                  size={22}
+                  color={palette.muted}
+                />
+              </TouchableOpacity>
             )}
           </View>
-        <TouchableOpacity>
-          <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+
+          <TouchableOpacity>
+            <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+
+          {/* BOTÓN LOGIN */}
+          <PrimaryButton
+            title="INICIAR SESIÓN"
+            onPress={handleLogin}
+            style={styles.btnWrapper}
+          />
+        </Animated.View>
+
+        {/* SEPARADOR */}
+        <View style={styles.separator}>
+          <View style={styles.line} />
+          <Text style={styles.separatorText}>o continúa con</Text>
+          <View style={styles.line} />
+        </View>
+
+        {/* GOOGLE */}
+        <TouchableOpacity style={styles.googleBtn}>
+          <Image
+                  source={{ uri: "https://developers.google.com/identity/images/g-logo.png" }}
+                  style={styles.googleIcon}
+          />
+          <Text style={styles.googleText}></Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Botón de login */}
-      <PrimaryButton
-        title="INICIAR SESIÓN"
-        onPress={handleLogin}
-        style={styles.btnWrapper}
-      />
-
-      {/* Separador */}
-      <View style={styles.separator}>
-        <View style={styles.line} />
-        <Text style={styles.separatorText}>o continúa con</Text>
-        <View style={styles.line} />
-      </View>
-
-      {/* Botón Google */}
-      <TouchableOpacity style={styles.googleBtn}>
-        <Image
-          source={{
-            uri: "https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
-          }}
-          style={styles.googleIcon}
-        />
-        <Text style={styles.googleText}>Google</Text>
-      </TouchableOpacity>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerTxt}>¿No tienes cuenta?</Text>
-        <Link href="/auth/register" style={styles.link}>
-          Regístrate
-        </Link>
-      </View>
-    </ScrollView> 
+        {/* FOOTER */}
+        <View style={styles.footer}>
+          <Text style={styles.footerTxt}>¿No tienes cuenta?</Text>
+          <Link href="/auth/register" style={styles.link}>
+            Regístrate
+          </Link>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-/* =====================
-   Estilos
-   ===================== */
+/* ===================== ESTILOS ===================== */
+
 const { RADIUS, SPACING, FONT } = theme;
 const palette = theme.Colors.light;
 
 const styles = StyleSheet.create({
-    keyboardAvoidingContainer: {
-        flex: 1,
-    },
-    scrollContainer: {
-        flex: 1,
-        backgroundColor: palette.white,
-    },
-    container: {
-        flexGrow: 1,
-        padding: SPACING.lg,
-        alignItems: "center",
-        justifyContent: "center", 
-    },
-
-  passwordInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%', // Asegura que ocupe el ancho completo
-    borderWidth: 1,
-    borderColor: "#bbb", // Mismos estilos que 'input'
-    borderRadius: RADIUS.md,
-    backgroundColor: palette.white,
-  },
-
-  // 2. El TextInput de la contraseña (sin bordes, flexible)
-  passwordInput: {
-    flex: 1, // Ocupa todo el espacio menos el ícono
-    paddingVertical: 12, // Mismos paddings que 'input'
-    paddingHorizontal: 14,
-    fontSize: FONT.md,
-    color: palette.text,
-  },
-
-  // 3. El botón del ojo
-  eyeButton: {
-    padding: 14, // Un área de toque cómoda (similar al padding del input)
-  },
-
-  /* ---------- Avatar ---------- */
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: palette.tint,
+  keyboardAvoidingContainer: { flex: 1 },
+  scrollContainer: { flex: 1, backgroundColor: palette.white },
+  container: {
+    flexGrow: 1,
+    padding: SPACING.lg,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  /* Pastel Background */
+  pastelTop: {
+    position: "absolute",
+    top: -160,
+    right: -100,
+    width: 320,
+    height: 320,
+    borderRadius: 320,
+    backgroundColor: palette.tint,
+    opacity: 0.15,
+  },
+  pastelBottom: {
+    position: "absolute",
+    bottom: -160,
+    left: -120,
+    width: 340,
+    height: 340,
+    borderRadius: 340,
+    backgroundColor: palette.icon,
+    opacity: 0.14,
+  },
+
+  /* HERO */
+  heroWrapper: {
     marginBottom: SPACING.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 200,
+    backgroundColor: palette.tint,
+    opacity: 0.14,
+  },
+  heroCircle: {
+    width: 170,
+    height: 170,
+    borderRadius: 170,
+    overflow: "hidden",
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
   },
 
-  avatarText: {
-    fontSize: FONT.xl,
-    fontWeight: "700" as const,
-    color: palette.white,
-  },
-
-  /* ---------- Encabezado ---------- */
+  /* TITULOS */
   title: {
     fontSize: FONT.xl,
-    fontWeight: "800" as const,
+    fontWeight: "800",
     color: palette.icon,
-    textAlign: "center" as const,
+    textAlign: "center",
+    marginTop: SPACING.sm,
   },
-
   subtitle: {
     fontSize: FONT.sm,
     color: palette.muted,
-    textAlign: "center" as const,
+    textAlign: "center",
     marginBottom: SPACING.lg,
   },
 
-  /* ---------- Formulario ---------- */
-  form: {
+  /* FORM CARD */
+  formCard: {
     width: "100%",
-    gap: 12,
-    marginBottom: SPACING.md,
+    backgroundColor: palette.white,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 18,
+    elevation: 3,
+    gap: SPACING.md,
   },
 
-  input: {
+  /* Inputs con iconos */
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
     borderWidth: 1,
-    borderColor: "#bbb", // 👈 convendría usar palette.border para consistencia
+    borderColor: "#ccc",
     borderRadius: RADIUS.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: FONT.md,
     backgroundColor: palette.white,
+    paddingHorizontal: SPACING.sm,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: FONT.md,
     color: palette.text,
+  },
+  eyeButton: {
+    padding: 8,
   },
 
   forgotPassword: {
     fontSize: FONT.sm,
     color: palette.muted,
-    textAlign: "right" as const,
-    marginTop: 4,
+    textAlign: "right",
   },
 
-  /* ---------- Toggle de rol ---------- */
-  roleToggle: {
-    flexDirection: "row",
-    width: "100%",
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-    backgroundColor: palette.background,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.xs,
-    gap: SPACING.xs,
-  },
-
-  roleOption: {
-    flex: 1,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: palette.white,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-
-  roleOptionActive: {
-    backgroundColor: palette.tint,
-    borderColor: palette.tint,
-  },
-
-  roleOptionText: {
-    fontSize: FONT.md,
-    color: palette.muted,
-    fontWeight: "600" as const,
-  },
-
-  roleOptionTextActive: {
-    color: palette.white,
-  },
-
-  /* ---------- Botón principal ---------- */
+  /* BTN */
   btnWrapper: {
-    marginTop: SPACING.md,
-    borderRadius: 50,
+    marginTop: SPACING.sm,
     width: "100%",
-    alignSelf: "center",
+    borderRadius: 50,
   },
 
-  /* ---------- Separador ---------- */
+  /* SEPARADOR */
   separator: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: SPACING.md,
     width: "100%",
   },
-
-  line: { 
-    flex: 1, 
-    height: 1, 
-    backgroundColor: "#ddd" 
-  },
-
   separatorText: {
     fontSize: FONT.sm,
     color: palette.muted,
     marginHorizontal: 8,
   },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ddd",
+  },
 
-  /* ---------- Botón Google ---------- */
+  /* Google Btn */
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -372,31 +411,11 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: SPACING.md,
   },
+  googleIcon: { width: 20, height: 20, marginRight: 8 },
+  googleText: { fontSize: FONT.md, color: palette.icon },
 
-  googleIcon: { 
-    width: 20, 
-    height: 20, 
-    marginRight: 8 
-  },
-
-  googleText: { 
-    fontSize: FONT.md, 
-    color: palette.icon 
-  },
-
-  /* ---------- Footer ---------- */
-  footer: { 
-    marginTop: 10, 
-    alignItems: "center" 
-  },
-
-  footerTxt: { 
-    color: palette.muted, 
-    marginBottom: 4 
-  },
-
-  link: { 
-    color: palette.tint, 
-    fontWeight: "700" as const 
-  },
+  /* FOOTER */
+  footer: { alignItems: "center" },
+  footerTxt: { color: palette.muted, marginBottom: 4 },
+  link: { color: palette.tint, fontWeight: "700" },
 });

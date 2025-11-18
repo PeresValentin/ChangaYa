@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
+import NavBar from "../../components/NavBar";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SkillsList from "../../components/profile/SkillsList";
@@ -259,7 +260,10 @@ const PerfilPrivadoScreen = () => {
           headerShadowVisible: false,
         }}
       />
-      {renderState()}
+      <View style={styles.container}>
+        {renderState()}
+        <NavBar />
+      </View>
     </SafeAreaView>
   );
 };
@@ -272,10 +276,13 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
+   container: {
+    flex: 1,
+  },
   content: {
     padding: SPACING.lg,
     gap: SPACING.lg,
-    paddingBottom: SPACING.lg * 2,
+     paddingBottom: SPACING.lg * 6,
   },
   sectionCard: {
     backgroundColor: palette.white,
@@ -368,6 +375,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: SPACING.lg,
     gap: SPACING.md,
+    paddingBottom: SPACING.lg * 4,
   },
   stateTitle: {
     fontSize: FONT.xl,
