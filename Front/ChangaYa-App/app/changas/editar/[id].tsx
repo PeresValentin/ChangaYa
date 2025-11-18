@@ -376,12 +376,15 @@ useEffect(() => {
                     >
                         <View style={styles.modalOverlay}>
                             <View style={styles.modalContent}>
-                                <DateTimePicker
-                                    mode={showDatePicker ? 'date' : 'time'}
-                                    display="spinner"
-                                    value={scheduledDate}
-                                    onChange={showDatePicker ? handleDateChange : handleTimeChange}
-                                />
+                                                                <DateTimePicker
+                                                    mode={showDatePicker ? 'date' : 'time'}
+                                                    display="spinner"
+                                                    value={scheduledDate}
+                                                    onChange={showDatePicker ? handleDateChange : handleTimeChange}
+                                                    themeVariant="light"
+                                                    textColor={palette.text}
+                                                    style={styles.dateTimePicker}
+                                                />
                                 <TouchableOpacity
                                     style={styles.modalConfirmButton}
                                     onPress={() => {
@@ -508,6 +511,9 @@ const styles = StyleSheet.create({
       fontSize: FONT.md,
       color: palette.text,
       marginLeft: SPACING.sm,
+  },
+  dateTimePicker: {
+      width: '100%',
   },
   iconLeft: {
       marginRight: SPACING.sm,

@@ -322,12 +322,15 @@ const CrearChangaScreen = () => {
                     >
                         <View style={styles.modalOverlay}>
                             <View style={styles.modalContent}>
-                                <DateTimePicker
-                                    mode={showDatePicker ? 'date' : 'time'}
-                                    display="spinner"
-                                    value={scheduledDate}
-                                    onChange={showDatePicker ? handleDateChange : handleTimeChange}
-                                />
+                               <DateTimePicker
+                                                mode={showDatePicker ? 'date' : 'time'}
+                                                display="spinner"
+                                                value={scheduledDate}
+                                                onChange={showDatePicker ? handleDateChange : handleTimeChange}
+                                                themeVariant="light"
+                                                textColor={palette.text}
+                                                style={styles.dateTimePicker}
+                                            />
                                 <TouchableOpacity
                                     style={styles.modalConfirmButton}
                                     onPress={() => {
@@ -496,6 +499,9 @@ const styles = StyleSheet.create({
   switch: {
       transform: [{ scaleX: 1.1 }, { scaleY: 1.1 }], // Hacerlo un poco más grande
       marginTop: SPACING.xs,
+  },
+  dateTimePicker: {
+      width: '100%',
   },
   dateButton: {
        flexDirection: 'row',
