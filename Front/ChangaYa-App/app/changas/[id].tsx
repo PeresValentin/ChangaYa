@@ -513,6 +513,14 @@ const JobDetailsScreen = () => {
         return applicants.filter((a) => assignedIDs.includes(a.id));
     }, [applicants, isContractor, jobDetails?.changa?.trabajadores]);
 
+    const isCurrentUserAssigned = useMemo(() => {
+        if (isContractor || !currentUserId || !jobDetails?.changa?.trabajadores) {
+            return false;
+        }
+        // Comparamos como strings para evitar problemas de tipo
+        return (jobDetails.changa.trabajadores || []).map(String).includes(String(currentUserId));
+    }, [isContractor, currentUserId, jobDetails?.changa?.trabajadores]);
+
     const handleCloseApplications = useCallback(async () => {
         if (!isContractor) return;
         if (!jobDetails?.changa?.changaID) return;
@@ -657,6 +665,40 @@ const handleFinalizeChanga = useCallback(async () => {
     fetchJobDetails
 ]);
 
+const handleReviewContratante = useCallback(() => {
+    // Doble chequeo de seguridad
+    if (isContractor || !jobDetails?.changa?.changaID) return;
+
+    const changaId = jobDetails.changa.changaID;
+    const contratanteId = contractorSummary?.id;
+    const contratanteName = contractorSummary?.name;
+
+    if (!changaId || !contratanteId) {
+        Alert.alert(
+            "Error de datos",
+            "No se pudo identificar al contratante a reseñar (ID: " + contratanteId + ") o la changa (ID: " + changaId + ")."
+        );
+        return;
+    }
+
+    console.log(`Navegando a Reseña Contratante con changaId: ${changaId}, contratanteId: ${contratanteId}`);
+
+    // Navegamos a la nueva pantalla de reseña
+    router.push({
+        pathname: '/resenia/reseniacontratante', // <-- NUEVA RUTA
+        params: { 
+            changaId: changaId,
+            contratanteId: contratanteId,
+            contratanteName: contratanteName 
+        }
+    });
+}, [
+    isContractor, 
+    jobDetails?.changa?.changaID, 
+    contractorSummary, // <-- Dependemos del resumen del contratante
+    router
+]);
+
 useFocusEffect(
   useCallback(() => {
     // Esta función que le pasamos a useFocusEffect es síncrona
@@ -796,7 +838,7 @@ useFocusEffect(
     const isIniciado = changaState === "iniciada";
     const isEnProceso = changaState === "enproceso" || changaState === "en_proceso";
     const isFinalizada = changaState === "finalizada";
-
+    const showApplyTip = !isContractor && isIniciado;
     const habilities = extractHabilities(changa);
     const summaryIcon: keyof typeof Ionicons.glyphMap = 'construct-outline';
     const scheduleText = formatSchedule(changa.horaInicio, changa.horaFin);
@@ -1011,6 +1053,7 @@ useFocusEffect(
                     </View>
                 </View>
             </ScrollView>
+            
                 <View style={styles.footer}>
                 {isContractor ? (
                     changa.estado?.toLowerCase() === "iniciada" ? (
@@ -1050,6 +1093,26 @@ useFocusEffect(
 
                     ) : null // Podés agregar más estados (finalizada etc.)
                 ) : (
+                    // CASO 1: Changa FINALIZADA y FUI ASIGNADO -> Botón de Reseña
+                    (isFinalizada && isCurrentUserAssigned) ? (
+                        <TouchableOpacity
+                            style={[styles.actionButtonPrimary, { flex: 1 }]}
+                            onPress={handleReviewContratante} 
+                        >
+                            <Ionicons name="star-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Dejar reseña al contratante</Text>
+                        </TouchableOpacity>
+                    // CASO 2: Changa EN PROCESO y FUI ASIGNADO -> Botón deshabilitado
+                    ) : (isEnProceso && isCurrentUserAssigned) ? (
+                        <TouchableOpacity
+                            style={[styles.actionButtonPrimary, styles.actionButtonPrimaryDisabled, { flex: 1 }]}
+                            disabled={true}
+                        >
+                            <Ionicons name="hourglass-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>Changa en proceso</Text>
+                        </TouchableOpacity>
+                    // CASO 3: Changa INICIADA (abierta a postulación) -> Lógica de Postulación
+                    ) : (isIniciado) ? (
                      <TouchableOpacity
                         style={[
                             styles.actionButtonPrimary,
@@ -1058,6 +1121,7 @@ useFocusEffect(
                         disabled={hasApplied || isApplying || isCheckingApplication}
                         onPress={handleApply}
                     >
+                        {/* (El contenido original del botón Postularme va aquí) */}
                         {isApplying ? (
                             <ActivityIndicator size="small" color={palette.white} />
                         ) : (
@@ -1071,11 +1135,23 @@ useFocusEffect(
                             {hasApplied ? 'Ya postulado' : 'Postularme'}
                         </Text>
                     </TouchableOpacity>
+                    // CASO 4: Otros estados (ej. finalizada pero no participé)
+                    ) : (
+                         <TouchableOpacity
+                            style={[styles.actionButtonPrimary, styles.actionButtonPrimaryDisabled, { flex: 1 }]}
+                            disabled={true}
+                        >
+                            <Ionicons name="lock-closed-outline" size={20} color={palette.white} />
+                            <Text style={styles.actionButtonTextPrimary}>
+                                {isFinalizada ? 'Changa finalizada' : 'No disponible'}
+                            </Text>
+                        </TouchableOpacity>
+                    )
                 )}
             </View>
 
 
-            {!isContractor && (
+            {showApplyTip && (
                 <Text style={styles.tipText}>
                     💡 Tip: Las respuestas rápidas aumentan tus posibilidades.
                 </Text>
@@ -1156,6 +1232,7 @@ const styles = StyleSheet.create({
     },
     actionButtonPrimaryDisabled: {
         opacity: 0.7,
+        backgroundColor: palette.muted,
     },
 
     applicantCard: {
@@ -1270,6 +1347,7 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.md,
         borderRadius: RADIUS.lg,
         gap: SPACING.sm,
+        flex: 1,
     },
 
     actionButtonTextPrimary: { color: palette.white, fontSize: FONT.md, fontWeight: 'bold' },
