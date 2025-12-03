@@ -4,27 +4,33 @@ import { supabase } from '../config/supabaseClient.js'
  *   1) CALCULAR PUNTAJE DE LA RESEÑA
  * --------------------------------------------------------- */
 export const calcularPuntajeResenia = async (reseñaID) => {
+  // 1) Traer reseña con destinatario
   const { data: reseña, error: rError } = await supabase
     .from('Reseña')
-    .select('reseñaID, usuarioID')
+    .select('reseñaID, destinatarioID')
     .eq('reseñaID', reseñaID)
-    .single()
+    .single();
 
-  if (rError) throw new Error("No se pudo obtener la reseña")
+  if (rError || !reseña) {
+    throw new Error("No se pudo obtener la reseña");
+  }
 
-  const { usuarioID } = reseña
+  const { destinatarioID } = reseña;
 
+  // 2) Traer tipoUsuario del DESTINATARIO (quien recibe la reseña)
   const { data: usuario, error: uError } = await supabase
     .from('Usuario')
     .select('tipoUsuario')
-    .eq('usuarioID', usuarioID)
-    .single()
+    .eq('usuarioID', destinatarioID)
+    .single();
 
-  if (uError) throw new Error("No se pudo obtener el usuario")
+  if (uError || !usuario) {
+    throw new Error("No se pudo obtener el usuario destinatario");
+  }
 
-  const rol = usuario.tipoUsuario
+  const rol = usuario.tipoUsuario;
 
-  let habilidadesNecesarias = []
+  let habilidadesNecesarias = [];
 
   if (rol === "trabajador") {
     habilidadesNecesarias = [
@@ -32,52 +38,62 @@ export const calcularPuntajeResenia = async (reseñaID) => {
       "Comunicación",
       "Trabajo en Equipo",
       "Responsabilidad",
-      "Puntualidad"
-    ]
+      "Puntualidad",
+    ];
   } else {
     habilidadesNecesarias = [
       "Claridad en las Indicaciones",
       "Respeto y Tratos",
       "Paga en Tiempo y Forma",
       "Responsabilidad",
-      "Puntualidad"
-    ]
+      "Puntualidad",
+    ];
   }
 
+  // 3) Buscar IDs de esas habilidades generales
   const { data: habilidades, error: hError } = await supabase
-    .from('Habilidad')
-    .select('habilidadID, nombre')
-    .in('nombre', habilidadesNecesarias)
+    .from("Habilidad")
+    .select("habilidadID, nombre")
+    .in("nombre", habilidadesNecesarias);
 
-  if (hError) throw new Error("No se pudieron obtener habilidades necesarias")
+  if (hError) throw new Error("No se pudieron obtener habilidades necesarias");
 
-  const habilidadIDs = habilidades.map(h => h.habilidadID)
+  const habilidadIDs = (habilidades ?? []).map((h) => h.habilidadID);
 
+  if (!habilidadIDs.length) {
+    // No encontró ninguna habilidad con esos nombres → revisar seed de Habilidad
+    return { updated: false, message: "No se encontraron habilidades generales para el usuario" };
+  }
+
+  // 4) Traer calificaciones SOLO de esas habilidades generales
   const { data: calificaciones, error: cError } = await supabase
-    .from('ReseñaHabilidad')
-    .select('calificacion')
-    .eq('reseñaID', reseñaID)
-    .in('habilidadID', habilidadIDs)
+    .from("ReseñaHabilidad")
+    .select("calificacion")
+    .eq("reseñaID", reseñaID)
+    .in("habilidadID", habilidadIDs);
 
-  if (cError) throw new Error("No se pudieron obtener calificaciones")
+  if (cError) throw new Error("No se pudieron obtener calificaciones");
 
-  if (calificaciones.length < 5) {
-    return { updated: false, message: "Aún faltan calificaciones para finalizar el puntaje." }
+  if (!calificaciones || calificaciones.length < habilidadesNecesarias.length) {
+    return {
+      updated: false,
+      message: "Aún faltan calificaciones generales para finalizar el puntaje.",
+    };
   }
 
   const puntaje =
-    calificaciones.reduce((acc, h) => acc + h.calificacion, 0) /
-    calificaciones.length
+    calificaciones.reduce((acc, h) => acc + (h.calificacion || 0), 0) /
+    calificaciones.length;
 
   const { error: updError } = await supabase
-    .from('Reseña')
+    .from("Reseña")
     .update({ puntaje })
-    .eq('reseñaID', reseñaID)
+    .eq("reseñaID", reseñaID);
 
-  if (updError) throw new Error("No se pudo actualizar el puntaje de la reseña")
+  if (updError) throw new Error("No se pudo actualizar el puntaje de la reseña");
 
-  return { updated: true, puntaje }
-}
+  return { updated: true, puntaje };
+};
 
 /* ---------------------------------------------------------
  *   2) CREAR RESEÑA (INCLUYE TODAS LAS VALIDACIONES NESESARIAS)
@@ -351,7 +367,15 @@ export const submitReseniaCompletaService = async (payload = {}, user = {}) => {
 
     if (insertError) throw new Error(insertError.message)
 
+    // 1) calcular puntaje de la reseña
     await calcularPuntajeResenia(reseñaRecord.reseñaID).catch(() => {})
+
+    // 2) actualizar ranking general del destinatario
+    try {
+      await calcularRankingGeneralUsuario(destinatarioID)
+    } catch (err) {
+      console.warn("No se pudo actualizar el rankingGeneral del usuario:", err.message);
+    }
   }
 
   return {
@@ -391,3 +415,45 @@ export const deleteReseniaService = async (id) => {
   if (error) throw new Error(error.message)
   return true
 }
+
+/* ------------------------------------------------------------------------
+ *  CALCULAR EL PROMEDIO GENERAL DE TODAS LAS RESEÑAS VÁLIDAS DE UN USUARIO
+ *  (EXCLUYE reseñas con puntaje 0.0 ya que siguen pendientes)
+ * ------------------------------------------------------------------------ */
+export const calcularRankingGeneralUsuario = async (usuarioID) => {
+  // 1. Obtener todas las reseñas COMPLETADAS recibidas por este usuario
+  const { data: resenias, error: rError } = await supabase
+    .from("Reseña")
+    .select("puntaje")
+    .eq("destinatarioID", usuarioID)
+    .eq("estado", "completada");
+
+  if (rError) throw new Error("No se pudieron obtener reseñas del usuario");
+
+  // 2. FILTRAR — solo puntaje > 0.0 (reseñas realmente completadas)
+  const puntajesValidos = resenias
+    .map(r => r.puntaje)
+    .filter(p => typeof p === "number" && p > 0);
+
+  if (!puntajesValidos.length) {
+    // Sin reseñas válidas => ranking 0 (o null si preferís)
+    await supabase
+      .from("Usuario")
+      .update({ rankingGeneral: 0 })
+      .eq("usuarioID", usuarioID);
+
+    return 0;
+  }
+
+  // 3. Promedio SOLO de reseñas válidas
+  const ranking =
+    puntajesValidos.reduce((acc, p) => acc + p, 0) / puntajesValidos.length;
+
+  // 4. Guardar promedio
+  await supabase
+    .from("Usuario")
+    .update({ rankingGeneral: ranking })
+    .eq("usuarioID", usuarioID);
+
+  return ranking;
+};

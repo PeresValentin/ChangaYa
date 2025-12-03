@@ -21,8 +21,12 @@ const ReviewItem = ({ title, contractor, date, rating, description }: ReviewItem
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <View style={styles.titleBlock}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{contractor}</Text>
+            <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {contractor}
+          </Text>
         </View>
         <View style={styles.ratingBadge}>
           <Ionicons name="star" size={16} color={palette.white} />
@@ -37,24 +41,22 @@ const ReviewItem = ({ title, contractor, date, rating, description }: ReviewItem
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: palette.white,
-    borderRadius: RADIUS.md,
+    backgroundColor: palette.background,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     gap: SPACING.xs,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 14,
-    elevation: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.border,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+     gap: SPACING.sm,
   },
   titleBlock: {
     flex: 1,
-    marginRight: SPACING.sm,
+    
     gap: 2,
   },
   title: {
@@ -72,9 +74,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: palette.tint,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingVertical: 4,
+    minWidth: 64,
+    justifyContent: "center",
   },
   ratingText: {
     color: palette.white,
@@ -92,6 +96,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontFamily: fontFamilies.rounded,
     lineHeight: 20,
+    marginTop: 2,
   },
 });
 
