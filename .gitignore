@@ -154,3 +154,6 @@ supabase/migrations/.shadow/
 # OS
 .DS_Store
 Thumbs.db
+
+#git
+*instructions*
