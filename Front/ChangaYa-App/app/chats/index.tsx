@@ -73,13 +73,41 @@ const ChatsScreen = () => {
         }
       );
 
+      const otherUserIds = Array.from(
+        new Set(
+          response.data
+            .map((chat) => chat.otroUsuario?.usuarioID)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      const avatarMap = new Map<string, string | null>();
+      await Promise.all(
+        otherUserIds.map(async (userId) => {
+          try {
+            const perfilResponse = await axios.get(
+              `${API_URL}/api/perfil/usuario/${userId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const fotoURL = perfilResponse.data?.fotoURL
+              ? `${perfilResponse.data.fotoURL}?t=${Date.now()}`
+              : null;
+            avatarMap.set(userId, fotoURL);
+          } catch (perfilError) {
+            console.warn("No pudimos obtener el avatar del chat", perfilError);
+            avatarMap.set(userId, null);
+          }
+        })
+      );
+
       // Transformamos backend → frontend
       const mappedChats: Chat[] = response.data.map((chat) => ({
         id: chat.chatID,
         user: `${chat.otroUsuario.nombre} ${chat.otroUsuario.apellido}`,
         lastMessage: chat.ultimoMensaje ?? "Sin mensajes aún",
         time: formatTime(chat.fechaUltimoMensaje ?? chat.fechaInicio),
-        unread: 0 // Más adelante con WebSockets
+        unread: 0, // Más adelante con WebSockets
+        avatarUrl: avatarMap.get(chat.otroUsuario.usuarioID) ?? null,
       }));
 
       setChats(mappedChats);

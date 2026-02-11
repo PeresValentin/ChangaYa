@@ -1,6 +1,6 @@
 // Front/ChangaYa-App/components/ChatListItem.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 // =========================================================
 // 1. INTERFACES (Tipos de datos)
@@ -13,6 +13,7 @@ export interface Chat {
     lastMessage: string;
     time: string;
     unread: number;
+    avatarUrl?: string | null;
     // Agregá aquí otras propiedades que uses (ej. avatarUrl, changaTitle)
 }
 
@@ -43,14 +44,18 @@ const getInitials = (name: string): string => {
 // Usamos React.FC<ChatListItemProps> para aplicar los tipos al componente
 const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onPress }) => {
     // La desestructuración aquí ya está tipada gracias a ChatListItemProps
-    const { user, lastMessage, time, unread } = chat;
+    const { user, lastMessage, time, unread, avatarUrl } = chat;
     const initials = getInitials(user);
 
     return (
         <TouchableOpacity style={styles.chatItem} onPress={onPress}>
             {/* Avatar */}
             <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials}</Text>
+                {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                    <Text style={styles.avatarText}>{initials}</Text>
+                )}
             </View>
 
             {/* Contenido del Chat */}
@@ -90,6 +95,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
         color: '#fff',

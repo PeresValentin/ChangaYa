@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -442,6 +443,7 @@ const [isRecording, setIsRecording] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isOtherOnline, setIsOtherOnline] = useState(false);
+  const [otherUserAvatarUrl, setOtherUserAvatarUrl] = useState<string | null>(null);
    const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
@@ -463,6 +465,28 @@ const [isRecording, setIsRecording] = useState(false);
       ? details.usuario2
       : details.usuario1;
   }, [details, currentUserId]);
+
+  useEffect(() => {
+    const loadOtherUserAvatar = async () => {
+      if (!otherUser?.usuarioID || !token) return;
+
+      try {
+        const perfilResponse = await axios.get(
+          `${API_URL}/api/perfil/usuario/${otherUser.usuarioID}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const fotoURL = perfilResponse.data?.fotoURL
+          ? `${perfilResponse.data.fotoURL}?t=${Date.now()}`
+          : null;
+        setOtherUserAvatarUrl(fotoURL);
+      } catch (perfilError) {
+        console.warn('No pudimos obtener el avatar del chat', perfilError);
+        setOtherUserAvatarUrl(null);
+      }
+    };
+
+    loadOtherUserAvatar();
+  }, [otherUser?.usuarioID, token]);
 
   const sortMessages = useCallback((items: Message[]) => {
     return items.slice().sort(
@@ -823,7 +847,11 @@ const [isRecording, setIsRecording] = useState(false);
           onPress={() => otherUser && goToProfile(otherUser.usuarioID)}
         >
           <View style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>{getInitials(otherUser)}</Text>
+            {otherUserAvatarUrl ? (
+              <Image source={{ uri: otherUserAvatarUrl }} style={styles.headerAvatarImage} />
+            ) : (
+              <Text style={styles.headerAvatarText}>{getInitials(otherUser)}</Text>
+            )}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>{headerDisplayName}</Text>
@@ -935,6 +963,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#E0F0E0',
         justifyContent: 'center',
         alignItems: 'center',
+      overflow: 'hidden',
+    },
+    headerAvatarImage: {
+      width: '100%',
+      height: '100%',
     },
     headerAvatarText: {
         fontSize: 16,

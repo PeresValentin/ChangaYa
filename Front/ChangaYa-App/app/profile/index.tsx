@@ -1,9 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
 import { Stack, useRouter, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -279,6 +281,7 @@ const PerfilPrivadoScreen = () => {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const [reviewsSectionY, setReviewsSectionY] = useState<number | null>(null);
 
@@ -378,6 +381,77 @@ const PerfilPrivadoScreen = () => {
     }
   }, [API_URL, router]);
 
+  const handleAvatarChange = useCallback(async () => {
+    if (!API_URL) {
+      Alert.alert("Configuración incompleta", "No encontramos la URL de la API.");
+      return;
+    }
+
+    if (isUploadingAvatar) {
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permiso requerido",
+        "Necesitamos acceso a tu galería para actualizar la foto de perfil.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    if (!asset.base64) {
+      Alert.alert("Error", "No pudimos procesar la imagen seleccionada.");
+      return;
+    }
+
+    const mimeType = asset.mimeType || "image/jpeg";
+    const imageBase64 = `data:${mimeType};base64,${asset.base64}`;
+
+    try {
+      const token = await AsyncStorage.getItem("jwtToken");
+      if (!token) {
+        Alert.alert("Sesión expirada", "Iniciá sesión nuevamente.");
+        router.replace("/auth/login");
+        return;
+      }
+
+      setIsUploadingAvatar(true);
+      const response = await axios.post(
+        `${API_URL}/api/perfil/avatar`,
+        { imageBase64, contentType: mimeType },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      const rawFotoURL = response.data?.fotoURL ?? null;
+      const fotoURL = rawFotoURL ? `${rawFotoURL}?t=${Date.now()}` : null;
+      setProfile((prev) => (prev ? { ...prev, avatarUrl: fotoURL } : prev));
+      Alert.alert("Foto actualizada", "Tu foto de perfil fue actualizada.");
+    } catch (error: any) {
+      console.error("Error al subir el avatar", error?.response?.data || error);
+      const backendMessage =
+        typeof error?.response?.data?.error === "string"
+          ? error.response.data.error
+          : "No pudimos actualizar la foto.";
+      Alert.alert("Error", backendMessage);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }, [API_URL, isUploadingAvatar, router]);
+
  useFocusEffect(
     useCallback(() => {
       loadProfile();
@@ -456,6 +530,13 @@ const PerfilPrivadoScreen = () => {
 
     return [
       {
+        label: isUploadingAvatar ? "Subiendo foto" : "Cambiar foto",
+        icon: "camera-outline",
+        variant: "secondary",
+        onPress: handleAvatarChange,
+        disabled: isUploadingAvatar,
+      },
+      {
         label: hasReviews ? "Reseñas" : "Sin reseñas",
         icon: "star-outline",
         variant: "secondary",
@@ -475,7 +556,7 @@ const PerfilPrivadoScreen = () => {
         onPress: () => router.push("/chats"),
       },
     ];
-  }, [handleScrollToReviews, hasReviews, profile, router]);
+  }, [handleAvatarChange, handleScrollToReviews, hasReviews, isUploadingAvatar, profile, router]);
 
 
   const renderState = () => {

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galería para actualizar tu foto de perfil."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,6 +21,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": ["READ_MEDIA_IMAGES"],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },

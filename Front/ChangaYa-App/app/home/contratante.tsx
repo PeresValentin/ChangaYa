@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import { HelloWave } from "../../components/hello-wave";
 import theme from "../../constants/theme";
@@ -150,6 +151,7 @@ export default function InicioContratanteScreen() {
   const [loading, setLoading] = useState(true);
    const [userName, setUserName] = useState<string>("");
   const [initials, setInitials] = useState("?");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -178,6 +180,19 @@ export default function InicioContratanteScreen() {
         if (apiName) {
           setUserName(apiName);
           setInitials(buildInitials(apiName));
+        }
+
+        try {
+          const perfilResponse = await axios.get(
+            `${API_URL}/api/perfil/usuario/${storedId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const fotoURL = perfilResponse.data?.fotoURL
+            ? `${perfilResponse.data.fotoURL}?t=${Date.now()}`
+            : null;
+          setAvatarUrl(fotoURL);
+        } catch (perfilError) {
+          console.warn("No pudimos obtener el avatar del perfil", perfilError);
         }
       } catch (error) {
         console.error("Error al cargar los datos del usuario:", error);
@@ -260,7 +275,11 @@ useFocusEffect(
               accessibilityLabel="Ir a mi perfil"
               accessibilityRole="button"
             >
-              <Text style={styles.avatarInitial}>{initials}</Text>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitial}>{initials}</Text>
+              )}
             </TouchableOpacity>
           </View>
           {/* REFACTOR: Botón "Crear Nueva Changa" */}
@@ -511,6 +530,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: palette.tint,
     elevation: 3,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
     fontSize: FONT.lg,

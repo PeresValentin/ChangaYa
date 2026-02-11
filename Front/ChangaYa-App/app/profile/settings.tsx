@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -117,6 +118,7 @@ const AjustesScreen = () => {
     email: "Sincronizando datos...",
     updatedAt: "Cargando información",
   });
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -160,6 +162,19 @@ const AjustesScreen = () => {
           email: apiEmail,
           updatedAt: "Actualizado hace unos segundos",
         });
+
+        try {
+          const perfilResponse = await axios.get(
+            `${API_URL}/api/perfil/usuario/${extractedId}`,
+            { headers }
+          );
+          const fotoURL = perfilResponse.data?.fotoURL
+            ? `${perfilResponse.data.fotoURL}?t=${Date.now()}`
+            : null;
+          setAvatarUrl(fotoURL);
+        } catch (perfilError) {
+          console.warn("No pudimos obtener el avatar del perfil", perfilError);
+        }
       } catch (error) {
         console.error("Error al cargar los datos del usuario en Ajustes", error);
       }
@@ -232,7 +247,11 @@ const AjustesScreen = () => {
       >
         <View style={styles.heroCard}>
           <View style={styles.heroAvatar}>
-            <Text style={styles.heroInitials}>{initials}</Text>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.heroAvatarImage} />
+            ) : (
+              <Text style={styles.heroInitials}>{initials}</Text>
+            )}
           </View>
           <View style={styles.heroTextWrapper}>
             <Text style={styles.heroName}>{userSummary.name}</Text>
@@ -336,6 +355,11 @@ const styles = StyleSheet.create({
     backgroundColor: palette.tint,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  heroAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
   heroInitials: {
     color: palette.white,

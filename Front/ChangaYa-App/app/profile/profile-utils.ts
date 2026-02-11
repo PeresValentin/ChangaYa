@@ -178,6 +178,12 @@ const buildAvatarUrl = (user: ApiUser, perfil: ApiPerfil | null) => {
   return candidates[0] || null;
 };
 
+const addCacheBuster = (url?: string | null) => {
+  if (!url) return null;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}t=${Date.now()}`;
+};
+
 
 export const mapUserToPublicProfile = (
   user: ApiUser,
@@ -226,7 +232,7 @@ export const mapUserToPublicProfile = (
     completedJobs,
     email: buildEmail(user),
     phone: buildPhone(user),
-    avatarUrl: buildAvatarUrl(user, perfil),
+    avatarUrl: addCacheBuster(buildAvatarUrl(user, perfil)),
     joinedAt: buildJoinedDate(user),
 
     about: aboutText,
