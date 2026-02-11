@@ -259,9 +259,12 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: "row",
     gap: SPACING.sm,
+    flexWrap: "wrap",
   },
   actionButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "48%",
+    minWidth: 140,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
