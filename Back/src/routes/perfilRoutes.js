@@ -3,6 +3,7 @@ import {
   createPerfil,
   getPerfilByUsuario,
   updatePerfil,
+  uploadPerfilAvatar,
   deletePerfil,
   getGeneralRanking,
   getGeneralHabilities,
@@ -14,6 +15,8 @@ import { verificarToken } from '../middleware/authMiddleware.js'
 const router = Router()
 
 router.get('/usuario/:id', verificarToken, getPerfilByUsuario)
+
+router.post('/avatar', verificarToken, uploadPerfilAvatar)
 
 
 router.post('/', verificarToken, createPerfil)

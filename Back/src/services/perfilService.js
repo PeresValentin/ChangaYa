@@ -52,6 +52,17 @@ export const updatePerfilService = async (perfilID, fields) => {
   return data[0]
 }
 
+export const updatePerfilFotoByUsuarioService = async (usuarioID, fotoPath) => {
+  const { data, error } = await supabase
+    .from('Perfil')
+    .update({ foto: fotoPath })
+    .eq('usuarioID', usuarioID)
+    .select()
+
+  if (error) throw new Error(error.message)
+  return data[0]
+}
+
 export const deletePerfilService = async (perfilID) => {
   const { error } = await supabase
     .from('Perfil')

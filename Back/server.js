@@ -12,7 +12,7 @@ dotenv.config();
 // Express app
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "6mb" }));
 
 // HTTP + Websocket server
 const server = http.createServer(app);
